@@ -31,7 +31,7 @@
       <el-table-column prop="real_name" label="姓名" width="120" />
       <el-table-column label="角色" width="110" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.role === 3 ? 'danger' : row.role === 2 ? 'warning' : 'info'">
+          <el-tag size="small" :type="row.role === 3 ? 'danger' : row.role === 2 ? 'warning' : row.role === 4 ? 'success' : 'info'">
             {{ roleText(row.role) }}
           </el-tag>
         </template>
