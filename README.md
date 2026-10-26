@@ -883,7 +883,7 @@ stateDiagram-v2
 - MySQL 5.7+ / 8.0，字符集 `utf8mb4`
 - Node.js >= 18（仅前端构建需要）
 
-> 推荐使用 [ServBay](https://www.servbay.com) 作为 PHP / MySQL 运行环境（物料包：[ServBay-Material.zip](https://www.servbay.com/material/ServBay-Material.zip)）。项目 `public/static/ServBay-Material/` 内已内置品牌 Logo / 图标资源。
+> 推荐使用 [ServBay](https://www.servbay.com) 作为 PHP / MySQL 运行环境
 
 ### 后端
 
@@ -902,27 +902,7 @@ mysql -uroot -p pack_submit < database/pack_submit.sql
 
 `database/pack_submit.sql` 是基础结构。已有库按需执行增量脚本（新库已包含的字段可跳过）：
 
-| 脚本 | 作用 |
-| --- | --- |
-| `upgrade_pack_confirm.sql` | 包装确认单字段扩展 |
-| `upgrade_with_pallet.sql` | 是否带托盘交付 |
-| `upgrade_nullable_yesno.sql` | 三个是否项改为可空 |
-| `upgrade_drop_legacy_fields.sql` | 移除旧字段 title / material_no / pack_type |
-| `upgrade_master_data.sql` | 客户 / 供应商档案 |
-| `upgrade_supplier_part.sql` | 供应商指定零件号 |
-| `upgrade_soft_delete.sql` | 客户 / 供应商软删除（旧库） |
-| `upgrade_proposal_change.sql` | 变更来源字段 + 作废状态 |
-| `upgrade_part_log.sql` | 零件号维护日志 |
-| `upgrade_master_log.sql` | 客户 / 供应商 / 用户维护日志 |
-| `upgrade_supplier_contact.sql` | 供应商联系人 |
-| `upgrade_attachment_md5.sql` | 附件 MD5 去重 |
 
-可选种子数据：
-
-```bash
-mysql -uroot -p pack_submit < database/seed_master_data.sql   # 演示客户 / 供应商 / 零件号
-php database/seed_test_proposals.php                          # 演示方案 + 图片附件
-```
 
 启动：
 
