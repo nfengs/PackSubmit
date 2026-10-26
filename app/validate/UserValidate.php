@@ -18,7 +18,7 @@ class UserValidate extends Validate
         'username|账号'   => 'require|alphaDash|max:50',
         'password|密码'   => 'require|min:6|max:32',
         'real_name|姓名'  => 'require|max:50',
-        'role|角色'       => 'require|in:1,2,3',
+        'role|角色'       => 'require|in:1,2,3,4',
         'dept|部门'       => 'max:100',
         'phone|联系电话'  => 'max:30',
         'status|状态'     => 'in:0,1',

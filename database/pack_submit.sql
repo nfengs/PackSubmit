@@ -17,7 +17,7 @@ CREATE TABLE `pf_user` (
   `username`    varchar(50)  NOT NULL COMMENT '登录账号',
   `password`    varchar(255) NOT NULL COMMENT '密码(password_hash)',
   `real_name`   varchar(50)  NOT NULL DEFAULT '' COMMENT '姓名',
-  `role`        tinyint unsigned NOT NULL DEFAULT '1' COMMENT '角色 1供应商 2评审员 3管理员',
+  `role`        tinyint unsigned NOT NULL DEFAULT '1' COMMENT '角色 1供应商 2评审员 3管理员 4查看者',
   `dept`        varchar(100) NOT NULL DEFAULT '' COMMENT '部门/供应商',
   `phone`       varchar(30)  NOT NULL DEFAULT '' COMMENT '联系电话',
   `status`      tinyint unsigned NOT NULL DEFAULT '1' COMMENT '状态 1启用 0禁用',

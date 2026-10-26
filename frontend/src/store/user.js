@@ -21,6 +21,8 @@ export const useUserStore = defineStore('user', {
     isReviewer: (state) => Number(state.user?.role || 0) === ROLE.REVIEWER,
     /** 是否供应商 */
     isSubmitter: (state) => Number(state.user?.role || 0) === ROLE.SUBMITTER,
+    /** 是否查看者（内部只读） */
+    isViewer: (state) => Number(state.user?.role || 0) === ROLE.VIEWER,
     /** 角色名称 */
     roleName: (state) => ROLE_TEXT[Number(state.user?.role || 0)] || '',
     /** 显示名称 */

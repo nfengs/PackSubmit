@@ -133,6 +133,10 @@ class Proposal extends BaseController
             throw new BizException('评审员不能新增方案', 403, 403);
         }
 
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者只能查看，不能新增方案', 403, 403);
+        }
+
         // 方案草稿统一在管理员导入零件号时生成，供应商不再手动新增
         if ((int) $user->role === User::ROLE_SUBMITTER) {
             throw new BizException('方案由管理员导入零件号时自动生成，无需手动新增', 403, 403);
@@ -164,6 +168,10 @@ class Proposal extends BaseController
             throw new BizException('评审员不能新增方案', 403, 403);
         }
 
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者不能复制方案', 403, 403);
+        }
+
         $source = PackProposal::find($id);
 
         if (!$source) {
@@ -190,6 +198,10 @@ class Proposal extends BaseController
 
         if ((int) $user->role === User::ROLE_REVIEWER) {
             throw new BizException('评审员不能发起变更', 403, 403);
+        }
+
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者不能发起变更', 403, 403);
         }
 
         $source = PackProposal::find($id);

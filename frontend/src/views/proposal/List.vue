@@ -176,7 +176,7 @@ const query = reactive({
   page_size: 10,
 });
 
-const canCreate = computed(() => !userStore.isReviewer);
+const canCreate = computed(() => !userStore.isReviewer && !userStore.isViewer);
 const showOwner = computed(() => !userStore.isSubmitter);
 
 /**

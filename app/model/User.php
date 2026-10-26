@@ -25,6 +25,8 @@ class User extends Model
     public const ROLE_REVIEWER = 2;
     /** 角色：管理员 */
     public const ROLE_ADMIN = 3;
+    /** 角色：查看者（内部只读） */
+    public const ROLE_VIEWER = 4;
 
     /** 状态：禁用 */
     public const STATUS_DISABLED = 0;
@@ -36,6 +38,7 @@ class User extends Model
         self::ROLE_SUBMITTER => '供应商',
         self::ROLE_REVIEWER  => '评审员',
         self::ROLE_ADMIN     => '管理员',
+        self::ROLE_VIEWER    => '查看者',
     ];
 
     /** 表名 */

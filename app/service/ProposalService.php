@@ -444,8 +444,8 @@ class ProposalService
             throw new BizException('仅已归档的方案可以发起变更');
         }
 
-        if ((int) $user->role === User::ROLE_REVIEWER) {
-            throw new BizException('评审员不能发起变更', 403, 403);
+        if (in_array((int) $user->role, [User::ROLE_REVIEWER, User::ROLE_VIEWER], true)) {
+            throw new BizException('评审员和查看者不能发起变更', 403, 403);
         }
 
         if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($source, $user)) {
@@ -645,6 +645,10 @@ class ProposalService
             throw new BizException('仅草稿或驳回状态的方案可以提交评审');
         }
 
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者不能提交评审', 403, 403);
+        }
+
         if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($proposal, $user)) {
             throw new BizException('只能提交本供应商的方案', 403, 403);
         }
@@ -686,6 +690,10 @@ class ProposalService
     {
         if ((int) $proposal->status !== PackProposal::STATUS_PENDING) {
             throw new BizException('仅待评审状态的方案可以撤回');
+        }
+
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者不能撤回方案', 403, 403);
         }
 
         if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($proposal, $user)) {
@@ -776,6 +784,10 @@ class ProposalService
         }
 
         $isAdmin = (int) $user->role === User::ROLE_ADMIN;
+
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者不能删除方案', 403, 403);
+        }
 
         if (!$isAdmin && !self::canOperateAsSupplier($proposal, $user)) {
             throw new BizException('只能删除本供应商的方案', 403, 403);
@@ -929,6 +941,11 @@ class ProposalService
             return;
         }
 
+        // 查看者（内部只读）可以查看所有状态的方案，含草稿
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            return;
+        }
+
         // 本人，或同一供应商内的人员（数据互通）
         if (self::canOperateAsSupplier($proposal, $user)) {
             return;
@@ -951,8 +968,8 @@ class ProposalService
      */
     public static function assertEditable(PackProposal $proposal, User $user): void
     {
-        if ((int) $user->role === User::ROLE_REVIEWER) {
-            throw new BizException('评审员不能编辑方案', 403, 403);
+        if (in_array((int) $user->role, [User::ROLE_REVIEWER, User::ROLE_VIEWER], true)) {
+            throw new BizException('评审员和查看者不能编辑方案', 403, 403);
         }
 
         if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($proposal, $user)) {

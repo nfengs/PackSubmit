@@ -325,7 +325,7 @@ class User extends BaseController
 
             if ($role === null) {
                 $skipped++;
-                $errors[] = "第 {$lineNo} 行：角色不合法（应填 1供应商 / 2评审员 / 3管理员）";
+                $errors[] = "第 {$lineNo} 行：角色不合法（应填 1供应商 / 2评审员 / 3管理员 / 4查看者）";
                 continue;
             }
 
@@ -476,7 +476,7 @@ class User extends BaseController
         $help->setTitle('填写说明');
         $helpRows = [
             ['说明', '内容'],
-            ['角色', '1=供应商，2=评审员，3=管理员（也可填写中文：供应商 / 评审员 / 管理员）'],
+            ['角色', '1=供应商，2=评审员，3=管理员，4=查看者（也可填写中文：供应商 / 评审员 / 管理员 / 查看者）'],
             ['部门/供应商', '仅角色为“供应商”时必填，且必须与供应商档案中的名称一致'],
             ['初始密码', '新增账号必填，长度 6–32 位；已有账号可留空（留空不修改密码），填写则重置密码'],
             ['已有账号', '账号已存在时会更新姓名 / 角色 / 部门 / 电话，并可选重置密码'],
@@ -591,7 +591,7 @@ class User extends BaseController
             return null;
         }
 
-        if (in_array($value, ['1', '2', '3'], true)) {
+        if (in_array($value, ['1', '2', '3', '4'], true)) {
             return (int) $value;
         }
 
@@ -599,9 +599,11 @@ class User extends BaseController
             '供应商' => UserModel::ROLE_SUBMITTER,
             '评审员' => UserModel::ROLE_REVIEWER,
             '管理员' => UserModel::ROLE_ADMIN,
+            '查看者' => UserModel::ROLE_VIEWER,
             'submitter' => UserModel::ROLE_SUBMITTER,
             'reviewer'  => UserModel::ROLE_REVIEWER,
             'admin'     => UserModel::ROLE_ADMIN,
+            'viewer'    => UserModel::ROLE_VIEWER,
         ];
 
         return $map[$value] ?? null;

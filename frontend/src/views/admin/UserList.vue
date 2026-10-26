@@ -177,7 +177,7 @@
         type="info"
         :closable="false"
         show-icon
-        title="Excel 列顺序：登录账号、姓名、角色、部门/供应商、联系电话、初始密码。角色填 1供应商 / 2评审员 / 3管理员（或中文）。"
+        title="Excel 列顺序：登录账号、姓名、角色、部门/供应商、联系电话、初始密码。角色填 1供应商 / 2评审员 / 3管理员 / 4查看者（或中文）。"
         style="margin-bottom: 16px"
       />
       <el-upload

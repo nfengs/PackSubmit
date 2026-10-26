@@ -3,6 +3,7 @@ export const ROLE = {
   SUBMITTER: 1,
   REVIEWER: 2,
   ADMIN: 3,
+  VIEWER: 4,
 };
 
 /** 角色文字 */
@@ -10,6 +11,7 @@ export const ROLE_TEXT = {
   [ROLE.SUBMITTER]: '供应商',
   [ROLE.REVIEWER]: '评审员',
   [ROLE.ADMIN]: '管理员',
+  [ROLE.VIEWER]: '查看者',
 };
 
 /** 角色下拉选项 */
@@ -17,6 +19,7 @@ export const ROLE_OPTIONS = [
   { label: '供应商', value: ROLE.SUBMITTER },
   { label: '评审员', value: ROLE.REVIEWER },
   { label: '管理员', value: ROLE.ADMIN },
+  { label: '查看者', value: ROLE.VIEWER },
 ];
 
 /** 业务状态枚举 */

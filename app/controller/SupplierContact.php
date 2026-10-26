@@ -31,6 +31,10 @@ class SupplierContact extends BaseController
             throw new BizException('评审员无权访问供应商联系人', 403, 403);
         }
 
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者无权访问供应商联系人', 403, 403);
+        }
+
         $query = SupplierContactModel::with(['supplier']);
         $owner = null;
 
@@ -227,6 +231,10 @@ class SupplierContact extends BaseController
     {
         if ((int) $user->role === User::ROLE_REVIEWER) {
             throw new BizException('评审员无权维护供应商联系人', 403, 403);
+        }
+
+        if ((int) $user->role === User::ROLE_VIEWER) {
+            throw new BizException('查看者无权维护供应商联系人', 403, 403);
         }
     }
 
