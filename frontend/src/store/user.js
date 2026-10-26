@@ -19,7 +19,7 @@ export const useUserStore = defineStore('user', {
     isAdmin: (state) => Number(state.user?.role || 0) === ROLE.ADMIN,
     /** 是否评审员 */
     isReviewer: (state) => Number(state.user?.role || 0) === ROLE.REVIEWER,
-    /** 是否提交人 */
+    /** 是否供应商 */
     isSubmitter: (state) => Number(state.user?.role || 0) === ROLE.SUBMITTER,
     /** 角色名称 */
     roleName: (state) => ROLE_TEXT[Number(state.user?.role || 0)] || '',

@@ -38,7 +38,7 @@ class MasterData extends BaseController
     public function suppliers(): Json
     {
         $list = Supplier::where('status', Supplier::STATUS_ENABLED)
-            ->field('id,name,code,address,contact,phone,email,fax')
+            ->field('id,name,code,address')
             ->order('name')
             ->select()
             ->toArray();
@@ -47,7 +47,7 @@ class MasterData extends BaseController
     }
 
     /**
-     * 供应商指定零件号（提交人未指定 supplier 时默认取自己所属供应商）
+     * 供应商指定零件号（供应商未指定 supplier 时默认取自己所属供应商）
      * @return Json
      */
     public function parts(): Json
@@ -76,7 +76,7 @@ class MasterData extends BaseController
 
     /**
      * 当前登录用户所属供应商档案
-     * 提交人账号的「部门/供应商」(pf_user.dept) 即供应商名称；未匹配到档案时仅返回名称
+     * 供应商账号的「部门/供应商」(pf_user.dept) 即供应商名称；未匹配到档案时仅返回名称
      * @return Json
      */
     public function mySupplier(): Json
@@ -93,10 +93,6 @@ class MasterData extends BaseController
             'name'    => trim((string) $user->dept),
             'code'    => '',
             'address' => '',
-            'contact' => '',
-            'phone'   => '',
-            'email'   => '',
-            'fax'     => '',
         ]);
     }
 }

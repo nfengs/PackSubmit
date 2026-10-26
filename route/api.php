@@ -69,6 +69,8 @@ Route::group('api', function () {
 
             // 用户管理
             Route::get('users', 'admin.User/index');
+            Route::get('users/template', 'admin.User/template');
+            Route::post('users/import', 'admin.User/import');
             Route::get('users/:id/logs', 'admin.User/logs')->pattern(['id' => '\d+']);
             Route::post('users', 'admin.User/save');
             Route::put('users/:id', 'admin.User/update')->pattern(['id' => '\d+']);
@@ -102,6 +104,8 @@ Route::group('api', function () {
             // 供应商档案维护
             Route::get('suppliers', 'admin.Supplier/index');
             Route::get('suppliers/check-name', 'admin.Supplier/checkName');
+            Route::get('suppliers/template', 'admin.Supplier/template');
+            Route::post('suppliers/import', 'admin.Supplier/import');
             Route::get('suppliers/:id/logs', 'admin.Supplier/logs')->pattern(['id' => '\d+']);
             Route::post('suppliers', 'admin.Supplier/save');
             Route::put('suppliers/:id', 'admin.Supplier/update')->pattern(['id' => '\d+']);

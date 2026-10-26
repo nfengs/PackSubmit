@@ -39,10 +39,6 @@ class MasterLogService
             'name'    => '供应商名称',
             'code'    => '供应商代码',
             'address' => '供应商地址',
-            'contact' => '联系人',
-            'phone'   => '联系电话',
-            'email'   => '电子邮箱',
-            'fax'     => '传真',
             'status'  => '状态',
         ],
         MasterLog::BIZ_USER => [

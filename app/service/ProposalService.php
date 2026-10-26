@@ -7,6 +7,7 @@ use app\exception\BizException;
 use app\model\Attachment;
 use app\model\PackProposal;
 use app\model\Supplier;
+use app\model\SupplierContact;
 use app\model\SupplierPart;
 use app\model\User;
 use think\facade\Db;
@@ -214,7 +215,7 @@ class ProposalService
     /**
      * 新增方案
      * @param array $data 已过滤的表单数据
-     * @param User  $user 提交人
+     * @param User  $user 供应商
      * @return PackProposal
      * @throws \Throwable
      */
@@ -302,7 +303,7 @@ class ProposalService
     /**
      * 管理员导入指定零件号时，直接生成方案草稿
      * @param SupplierPart $part     指定零件号
-     * @param User         $owner    方案归属的供应商提交人
+     * @param User         $owner    方案归属的供应商供应商
      * @param User         $operator 操作人（管理员）
      * @return PackProposal|null 已存在有效方案时返回 null
      * @throws \Throwable
@@ -321,6 +322,7 @@ class ProposalService
         }
 
         $archive = Supplier::where('name', $supplier)->find();
+        $contact = self::supplierDefaultContact((int) ($archive?->id ?? 0));
 
         $data = [
             // 填写日期默认当天，其余资料由供应商后续补全
@@ -328,10 +330,10 @@ class ProposalService
             'supplier'         => $supplier,
             'supplier_code'    => (string) ($archive?->code ?? ''),
             'supplier_address' => (string) ($archive?->address ?? ''),
-            'contact'          => (string) ($archive?->contact ?? ''),
-            'phone'            => (string) ($archive?->phone ?? ''),
-            'supplier_email'   => (string) ($archive?->email ?? ''),
-            'supplier_fax'     => (string) ($archive?->fax ?? ''),
+            'contact'          => $contact['contact'],
+            'phone'            => $contact['phone'],
+            'supplier_email'   => $contact['email'],
+            'supplier_fax'     => $contact['fax'],
             'part_no'          => $partNo,
             'part_name'        => (string) $part->part_name,
             'project_model'    => (string) $part->project_name,
@@ -446,8 +448,8 @@ class ProposalService
             throw new BizException('评审员不能发起变更', 403, 403);
         }
 
-        if ((int) $user->role !== User::ROLE_ADMIN && (int) $source->user_id !== (int) $user->id) {
-            throw new BizException('只能对自己的方案发起变更', 403, 403);
+        if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($source, $user)) {
+            throw new BizException('只能对本供应商的方案发起变更', 403, 403);
         }
 
         return Db::transaction(function () use ($source, $user) {
@@ -475,12 +477,14 @@ class ProposalService
                 $own = Supplier::findByUser($user);
 
                 if ($own) {
+                    $contact = self::supplierDefaultContact((int) $own->id);
+
                     $data['supplier_code']    = $own->code ?? '';
                     $data['supplier_address'] = $own->address ?? '';
-                    $data['contact']          = $own->contact ?? '';
-                    $data['phone']            = $own->phone ?? '';
-                    $data['supplier_email']   = $own->email ?? '';
-                    $data['supplier_fax']     = $own->fax ?? '';
+                    $data['contact']          = $contact['contact'];
+                    $data['phone']            = $contact['phone'];
+                    $data['supplier_email']   = $contact['email'];
+                    $data['supplier_fax']     = $contact['fax'];
                 }
             }
 
@@ -491,7 +495,7 @@ class ProposalService
 
             $version = (int) $source->version + 1;
 
-            // 变更方案沿用原方案的归属人（管理员代发起时也保持提交人不变）
+            // 变更方案沿用原方案的归属人（管理员代发起时也保持供应商不变）
             $ownerId = (int) $source->user_id > 0 ? (int) $source->user_id : (int) $user->id;
 
             $proposal = PackProposal::create(array_merge($data, [
@@ -641,8 +645,8 @@ class ProposalService
             throw new BizException('仅草稿或驳回状态的方案可以提交评审');
         }
 
-        if ((int) $user->role !== User::ROLE_ADMIN && (int) $proposal->user_id !== (int) $user->id) {
-            throw new BizException('只能提交自己的方案', 403, 403);
+        if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($proposal, $user)) {
+            throw new BizException('只能提交本供应商的方案', 403, 403);
         }
 
         self::assertSubmitReady($proposal);
@@ -684,8 +688,8 @@ class ProposalService
             throw new BizException('仅待评审状态的方案可以撤回');
         }
 
-        if ((int) $user->role !== User::ROLE_ADMIN && (int) $proposal->user_id !== (int) $user->id) {
-            throw new BizException('只能撤回自己提交的方案', 403, 403);
+        if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($proposal, $user)) {
+            throw new BizException('只能撤回本供应商的方案', 403, 403);
         }
 
         if (!empty($proposal->review_time)) {
@@ -773,8 +777,8 @@ class ProposalService
 
         $isAdmin = (int) $user->role === User::ROLE_ADMIN;
 
-        if (!$isAdmin && (int) $proposal->user_id !== (int) $user->id) {
-            throw new BizException('只能删除自己的方案', 403, 403);
+        if (!$isAdmin && !self::canOperateAsSupplier($proposal, $user)) {
+            throw new BizException('只能删除本供应商的方案', 403, 403);
         }
 
         if (!$isAdmin && (int) $proposal->source_proposal_id <= 0) {
@@ -871,6 +875,48 @@ class ProposalService
     }
 
     /**
+     * 获取用户所属供应商名称（仅供应商角色有效），无法确定时返回空串
+     * @param User $user
+     * @return string
+     */
+    public static function supplierNameOf(User $user): string
+    {
+        if ((int) $user->role !== User::ROLE_SUBMITTER) {
+            return '';
+        }
+
+        $supplier = Supplier::findByUser($user);
+
+        return trim((string) ($supplier?->name ?? $user->dept));
+    }
+
+    /**
+     * 供应商内数据互通：当前用户是否可以以供应商身份操作该方案
+     * 即方案归属人为本人，或与本人属于同一供应商
+     * @param PackProposal $proposal
+     * @param User         $user
+     * @return bool
+     */
+    public static function canOperateAsSupplier(PackProposal $proposal, User $user): bool
+    {
+        if ((int) $user->role !== User::ROLE_SUBMITTER) {
+            return false;
+        }
+
+        if ((int) $proposal->user_id === (int) $user->id) {
+            return true;
+        }
+
+        $name = self::supplierNameOf($user);
+
+        if ($name === '') {
+            return false;
+        }
+
+        return $name === trim((string) $proposal->supplier);
+    }
+
+    /**
      * 校验查看权限
      * @param PackProposal $proposal
      * @param User         $user
@@ -883,7 +929,8 @@ class ProposalService
             return;
         }
 
-        if ((int) $proposal->user_id === (int) $user->id) {
+        // 本人，或同一供应商内的人员（数据互通）
+        if (self::canOperateAsSupplier($proposal, $user)) {
             return;
         }
 
@@ -908,8 +955,8 @@ class ProposalService
             throw new BizException('评审员不能编辑方案', 403, 403);
         }
 
-        if ((int) $user->role !== User::ROLE_ADMIN && (int) $proposal->user_id !== (int) $user->id) {
-            throw new BizException('只能编辑自己的方案', 403, 403);
+        if ((int) $user->role !== User::ROLE_ADMIN && !self::canOperateAsSupplier($proposal, $user)) {
+            throw new BizException('只能编辑本供应商的方案', 403, 403);
         }
 
         if (!in_array((int) $proposal->status, [PackProposal::STATUS_DRAFT, PackProposal::STATUS_REJECTED], true)) {
@@ -1022,8 +1069,29 @@ class ProposalService
     }
 
     /**
+     * 供应商默认联系人资料（姓名 / 电话 / 邮箱 / 传真）
+     * 联系人已迁移到 pf_supplier_contact，方案草稿回填时从默认联系人读取
+     * @param int $supplierId 供应商ID
+     * @return array{contact:string,phone:string,email:string,fax:string}
+     */
+    private static function supplierDefaultContact(int $supplierId): array
+    {
+        $contact = SupplierContact::where('supplier_id', $supplierId)
+            ->order('is_default', 'desc')
+            ->order('id', 'asc')
+            ->find();
+
+        return [
+            'contact' => (string) ($contact?->name ?? ''),
+            'phone'   => (string) ($contact?->phone ?? ''),
+            'email'   => (string) ($contact?->email ?? ''),
+            'fax'     => (string) ($contact?->fax ?? ''),
+        ];
+    }
+
+    /**
      * 供应商名称 / 代码只读：
-     *   - 提交人名称固定为自己所属供应商（pf_user.dept）
+     *   - 供应商名称固定为自己所属供应商（pf_user.dept）
      *   - 供应商代码一律以档案为准，忽略前端传入值
      * 其余供应商资料（地址、联系人、电话、邮箱、传真）允许自行修改
      * @param array $data
@@ -1049,7 +1117,7 @@ class ProposalService
     }
 
     /**
-     * 提交人只能使用供应商指定零件号，零件名称/项目名称以指定清单为准
+     * 供应商只能使用供应商指定零件号，零件名称/项目名称以指定清单为准
      * 评审员 / 管理员不做限制
      * @param array $data
      * @param User  $user

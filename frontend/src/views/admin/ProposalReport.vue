@@ -35,7 +35,7 @@
       >
         <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-select v-model="query.user_id" placeholder="提交人" clearable filterable style="width: 150px">
+      <el-select v-model="query.user_id" placeholder="供应商" clearable filterable style="width: 150px">
         <el-option v-for="item in submitters" :key="item.id" :label="item.real_name || item.username" :value="item.id" />
       </el-select>
       <el-select v-model="query.with_pallet" placeholder="是否带托盘" clearable style="width: 130px">
@@ -134,7 +134,7 @@ const ALL_COLUMNS = [
   { key: 'proposal_no', label: '方案编号', width: 170 },
   { key: 'version', label: '版本', width: 70, type: 'version' },
   { key: 'status', label: '状态', width: 130, type: 'status' },
-  { key: 'user_name', label: '提交人', width: 100, type: 'user' },
+  { key: 'user_name', label: '供应商', width: 100, type: 'user' },
   { key: 'part_no', label: '零件号', width: 140 },
   { key: 'part_name', label: '零件名称', width: 170 },
   { key: 'project_model', label: '项目车型', width: 140 },

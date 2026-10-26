@@ -19,7 +19,7 @@ use think\model\relation\HasMany;
  */
 class User extends Model
 {
-    /** 角色：提交人 */
+    /** 角色：供应商 */
     public const ROLE_SUBMITTER = 1;
     /** 角色：评审员 */
     public const ROLE_REVIEWER = 2;
@@ -33,7 +33,7 @@ class User extends Model
 
     /** 角色名称映射 */
     public const ROLE_TEXT = [
-        self::ROLE_SUBMITTER => '提交人',
+        self::ROLE_SUBMITTER => '供应商',
         self::ROLE_REVIEWER  => '评审员',
         self::ROLE_ADMIN     => '管理员',
     ];

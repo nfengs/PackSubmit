@@ -17,7 +17,7 @@ CREATE TABLE `pf_user` (
   `username`    varchar(50)  NOT NULL COMMENT '登录账号',
   `password`    varchar(255) NOT NULL COMMENT '密码(password_hash)',
   `real_name`   varchar(50)  NOT NULL DEFAULT '' COMMENT '姓名',
-  `role`        tinyint unsigned NOT NULL DEFAULT '1' COMMENT '角色 1提交人 2评审员 3管理员',
+  `role`        tinyint unsigned NOT NULL DEFAULT '1' COMMENT '角色 1供应商 2评审员 3管理员',
   `dept`        varchar(100) NOT NULL DEFAULT '' COMMENT '部门/供应商',
   `phone`       varchar(30)  NOT NULL DEFAULT '' COMMENT '联系电话',
   `status`      tinyint unsigned NOT NULL DEFAULT '1' COMMENT '状态 1启用 0禁用',
@@ -45,7 +45,7 @@ CREATE TABLE `pf_pack_proposal` (
   `description`   text COMMENT '方案说明',
   `version`       int unsigned NOT NULL DEFAULT '1' COMMENT '版本号',
   `status`        tinyint unsigned NOT NULL DEFAULT '0' COMMENT '状态 0草稿 1待评审 2通过 3驳回 4归档 5已归档-已变更-作废',
-  `user_id`       int unsigned NOT NULL COMMENT '提交人ID',
+  `user_id`       int unsigned NOT NULL COMMENT '供应商ID',
   `reviewer_id`   int unsigned DEFAULT NULL COMMENT '最近评审人ID',
   `review_remark` varchar(500) NOT NULL DEFAULT '' COMMENT '最近评审意见',
   `submit_time`   datetime DEFAULT NULL COMMENT '提交时间',
@@ -153,10 +153,6 @@ CREATE TABLE `pf_supplier` (
   `name`        varchar(100) NOT NULL COMMENT '供应商名称',
   `code`        varchar(50)  NOT NULL DEFAULT '' COMMENT '供应商代码',
   `address`     varchar(255) NOT NULL DEFAULT '' COMMENT '供应商地址',
-  `contact`     varchar(50)  NOT NULL DEFAULT '' COMMENT '联系人',
-  `phone`       varchar(30)  NOT NULL DEFAULT '' COMMENT '联系电话',
-  `email`       varchar(100) NOT NULL DEFAULT '' COMMENT '电子邮箱',
-  `fax`         varchar(30)  NOT NULL DEFAULT '' COMMENT '传真',
   `status`      tinyint unsigned NOT NULL DEFAULT '1' COMMENT '状态：1启用 0禁用',
   `create_time` datetime DEFAULT NULL COMMENT '创建时间',
   `update_time` datetime DEFAULT NULL COMMENT '更新时间',
@@ -166,7 +162,7 @@ CREATE TABLE `pf_supplier` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='供应商档案表';
 
 -- ----------------------------
--- 供应商指定零件号（提交人只能从这些零件号中选择）
+-- 供应商指定零件号（供应商只能从这些零件号中选择）
 -- ----------------------------
 DROP TABLE IF EXISTS `pf_supplier_part`;
 CREATE TABLE `pf_supplier_part` (
@@ -226,11 +222,11 @@ INSERT INTO `pf_customer` (`name`,`address`,`contact`,`phone`,`email`,`fax`,`sta
 ('客户D','湖北省武汉市经济技术开发区东风大道 400 号','陈经理','027-60000004','cust_d@example.com','027-60000006',1,NOW(),NOW()),
 ('客户E','广东省广州市黄埔区开泰大道 500 号','周经理','020-60000005','cust_e@example.com','020-60000005',1,NOW(),NOW());
 
-INSERT INTO `pf_supplier` (`name`,`code`,`address`,`contact`,`phone`,`email`,`fax`,`status`,`create_time`,`update_time`) VALUES
-('供应商A','SUP-A001','江苏省苏州市工业园区新平街 8 号','张三','0512-60000001','sup_a@example.com','0512-60000009',1,NOW(),NOW()),
-('供应商B','SUP-B002','浙江省宁波市北仑区大港工业城 18 号','李四','0574-60000002','sup_b@example.com','0574-60000008',1,NOW(),NOW()),
-('供应商C','SUP-C003','安徽省合肥市经开区繁华大道 28 号','王五','0551-60000003','sup_c@example.com','0551-60000007',1,NOW(),NOW()),
-('供应商D','SUP-D004','山东省青岛市城阳区锦宏西路 38 号','孙六','0532-60000004','sup_d@example.com','0532-60000006',1,NOW(),NOW());
+INSERT INTO `pf_supplier` (`name`,`code`,`address`,`status`,`create_time`,`update_time`) VALUES
+('供应商A','SUP-A001','江苏省苏州市工业园区新平街 8 号',1,NOW(),NOW()),
+('供应商B','SUP-B002','浙江省宁波市北仑区大港工业城 18 号',1,NOW(),NOW()),
+('供应商C','SUP-C003','安徽省合肥市经开区繁华大道 28 号',1,NOW(),NOW()),
+('供应商D','SUP-D004','山东省青岛市城阳区锦宏西路 38 号',1,NOW(),NOW());
 
 INSERT INTO `pf_supplier_part` (`supplier_name`,`project_name`,`part_no`,`part_name`,`create_time`,`update_time`) VALUES
 ('供应商A','新能源重卡 X1','PN-2026-0001','精密减速机壳体',NOW(),NOW()),

@@ -32,6 +32,18 @@ export function getUserLogs(id) {
   return request.get(`/admin/users/${id}/logs`);
 }
 
+/** 用户批量导入（Excel） */
+export function importUsers(formData) {
+  return request.post('/admin/users/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+/** 下载用户导入模板 */
+export function downloadUserTemplate() {
+  return request.get('/admin/users/template', { responseType: 'blob' });
+}
+
 /* -------------------- 字典管理 -------------------- */
 
 /** 字典列表 */
@@ -111,6 +123,18 @@ export function updateSupplier(id, data) {
 /** 供应商维护日志 */
 export function getSupplierLogs(id) {
   return request.get(`/admin/suppliers/${id}/logs`);
+}
+
+/** 供应商批量导入（Excel） */
+export function importSuppliers(formData) {
+  return request.post('/admin/suppliers/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+}
+
+/** 下载供应商导入模板 */
+export function downloadSupplierTemplate() {
+  return request.get('/admin/suppliers/template', { responseType: 'blob' });
 }
 
 /** 删除供应商 */

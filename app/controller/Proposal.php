@@ -21,7 +21,7 @@ class Proposal extends BaseController
 {
     /**
      * 方案列表
-     * 提交人自动追加 user_id 过滤；评审员排除他人草稿；管理员查看全量
+     * 供应商自动追加 user_id 过滤；评审员排除他人草稿；管理员查看全量
      * @return Json
      */
     public function index(): Json
@@ -468,8 +468,14 @@ class Proposal extends BaseController
         $role = (int) $user->role;
 
         if ($role === User::ROLE_SUBMITTER) {
-            // 提交人只能看到自己的方案
-            $query->where('user_id', (int) $user->id);
+            // 供应商内数据互通：可查看本供应商所有人员的方案
+            $supplierName = ProposalService::supplierNameOf($user);
+
+            if ($supplierName !== '') {
+                $query->where('supplier', $supplierName);
+            } else {
+                $query->where('user_id', (int) $user->id);
+            }
         } elseif ($role === User::ROLE_REVIEWER) {
             // 评审员可查看所有已提交的方案，但不能查看他人草稿
             $query->where('status', '<>', PackProposal::STATUS_DRAFT);
@@ -486,29 +492,29 @@ class Proposal extends BaseController
      */
     protected function permissions(PackProposal $proposal, User $user): array
     {
-        $role    = (int) $user->role;
-        $status  = (int) $proposal->status;
-        $isOwner = (int) $proposal->user_id === (int) $user->id;
-        $isAdmin = $role === User::ROLE_ADMIN;
+        $role             = (int) $user->role;
+        $status           = (int) $proposal->status;
+        $isAdmin          = $role === User::ROLE_ADMIN;
+        $isSupplierMember = ProposalService::canOperateAsSupplier($proposal, $user);
 
         return [
             'can_edit'    => $role !== User::ROLE_REVIEWER
-                && ($isOwner || $isAdmin)
+                && ($isSupplierMember || $isAdmin)
                 && in_array($status, [PackProposal::STATUS_DRAFT, PackProposal::STATUS_REJECTED], true),
             // 导入生成的方案供应商不能删除，只有变更草稿允许删除（终止变更）；管理员不受限
             'can_delete'  => $status === PackProposal::STATUS_DRAFT
-                && ($isOwner || $isAdmin)
+                && ($isSupplierMember || $isAdmin)
                 && ($isAdmin || (int) $proposal->source_proposal_id > 0),
             'can_submit'  => in_array($status, [PackProposal::STATUS_DRAFT, PackProposal::STATUS_REJECTED], true)
-                && ($isOwner || $isAdmin),
+                && ($isSupplierMember || $isAdmin),
             'can_withdraw' => $status === PackProposal::STATUS_PENDING
-                && ($isOwner || $isAdmin)
+                && ($isSupplierMember || $isAdmin)
                 && empty($proposal->review_time),
             'can_review'  => in_array($role, [User::ROLE_REVIEWER, User::ROLE_ADMIN], true)
                 && $status === PackProposal::STATUS_PENDING,
             'can_archive' => $isAdmin && $status === PackProposal::STATUS_APPROVED,
             'can_change'  => $role !== User::ROLE_REVIEWER
-                && ($isOwner || $isAdmin)
+                && ($isSupplierMember || $isAdmin)
                 && $status === PackProposal::STATUS_ARCHIVED
                 && !ProposalService::hasActiveChange((int) $proposal->id),
         ];

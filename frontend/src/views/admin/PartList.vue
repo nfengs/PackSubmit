@@ -549,7 +549,7 @@ async function openLogs(row) {
 
 async function handleDelete(row) {
   await ElMessageBox.confirm(
-    `确定删除「${row.supplier_name} / ${row.part_no}」吗？删除后提交人将无法再选择该零件号。`,
+    `确定删除「${row.supplier_name} / ${row.part_no}」吗？删除后供应商将无法再选择该零件号。`,
     '删除指定零件号',
     { type: 'warning' },
   );

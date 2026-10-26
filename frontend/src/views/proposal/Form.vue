@@ -98,7 +98,7 @@
               />
             </el-select>
             <div v-if="supplierLocked" class="form-tip">
-              提交人只能使用自己所属供应商，供应商名称与代码不可修改
+              供应商只能使用自己所属供应商，供应商名称与代码不可修改
             </div>
           </el-form-item>
         </el-col>
@@ -503,7 +503,7 @@ const userStore = useUserStore();
 
 const isEdit = computed(() => route.name === 'ProposalEdit');
 const proposalId = computed(() => (isEdit.value ? Number(route.params.id) : 0));
-/** 提交人只能使用自己所属供应商 */
+/** 供应商只能使用自己所属供应商 */
 const supplierLocked = computed(() => userStore.isSubmitter);
 
 const formRef = ref(null);
@@ -995,11 +995,11 @@ async function fillSupplier(target = {}) {
     return;
   }
 
-  // 供应商尚未维护联系人时，兼容使用档案上的联系人资料
-  form.contact = target.contact || '';
-  form.phone = target.phone || '';
-  form.supplier_email = target.email || '';
-  form.supplier_fax = target.fax || '';
+  // 供应商尚未维护联系人时，清空联系人资料（联系人统一在「联系人维护」中维护）
+  form.contact = '';
+  form.phone = '';
+  form.supplier_email = '';
+  form.supplier_fax = '';
 }
 
 /**
@@ -1089,7 +1089,7 @@ watch(
 );
 
 /**
- * 提交人：锁定为当前账号所属供应商并回填资料
+ * 供应商：锁定为当前账号所属供应商并回填资料
  */
 async function applyMySupplier() {
   const mine = await getMySupplier();
@@ -1336,7 +1336,7 @@ onMounted(async () => {
       await loadDetail();
     }
 
-    // 提交人新增时默认带出自己所属供应商；编辑时保留单据已保存的资料
+    // 供应商新增时默认带出自己所属供应商；编辑时保留单据已保存的资料
     if (supplierLocked.value && !isEdit.value) {
       await applyMySupplier();
     }

@@ -12,10 +12,6 @@ use think\model\concern\SoftDelete;
  * @property string $name
  * @property string $code
  * @property string $address
- * @property string $contact
- * @property string $phone
- * @property string $email
- * @property string $fax
  * @property int    $status
  */
 class Supplier extends Model

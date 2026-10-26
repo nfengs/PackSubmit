@@ -13,13 +13,13 @@ use think\facade\Db;
 use think\response\Json;
 
 /**
- * 供应商联系人（供应商自行维护，可增删改；提交人只能维护自己所属供应商）
+ * 供应商联系人（供应商自行维护，可增删改；供应商只能维护自己所属供应商）
  */
 class SupplierContact extends BaseController
 {
     /**
      * 联系人列表
-     * 提交人：固定返回自己所属供应商的联系人
+     * 供应商：固定返回自己所属供应商的联系人
      * 管理员：可按 supplier_id / supplier 名称过滤，不传则返回全部
      * @return Json
      */
@@ -218,7 +218,7 @@ class SupplierContact extends BaseController
     }
 
     /**
-     * 仅提交人与管理员可维护联系人
+     * 仅供应商与管理员可维护联系人
      * @param User $user
      * @return void
      * @throws BizException
@@ -232,7 +232,7 @@ class SupplierContact extends BaseController
 
     /**
      * 解析本次操作对应的供应商
-     * 提交人强制为自己所属供应商；管理员需显式指定 supplier_id 或 supplier 名称
+     * 供应商强制为自己所属供应商；管理员需显式指定 supplier_id 或 supplier 名称
      * @param array $data
      * @param User  $user
      * @return Supplier

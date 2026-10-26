@@ -7,14 +7,14 @@ export const ROLE = {
 
 /** 角色文字 */
 export const ROLE_TEXT = {
-  [ROLE.SUBMITTER]: '提交人',
+  [ROLE.SUBMITTER]: '供应商',
   [ROLE.REVIEWER]: '评审员',
   [ROLE.ADMIN]: '管理员',
 };
 
 /** 角色下拉选项 */
 export const ROLE_OPTIONS = [
-  { label: '提交人', value: ROLE.SUBMITTER },
+  { label: '供应商', value: ROLE.SUBMITTER },
   { label: '评审员', value: ROLE.REVIEWER },
   { label: '管理员', value: ROLE.ADMIN },
 ];

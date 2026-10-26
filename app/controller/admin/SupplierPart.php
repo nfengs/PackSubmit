@@ -89,7 +89,7 @@ class SupplierPart extends BaseController
         $warnings = [];
         $operator = $this->currentUser();
 
-        // 供应商提交人缓存：方案草稿归属该供应商的提交人账号
+        // 供应商供应商缓存：方案草稿归属该供应商的供应商账号
         $ownerCache = [];
         $ownerOf = static function (string $supplierName) use (&$ownerCache): ?User {
             if (!array_key_exists($supplierName, $ownerCache)) {
@@ -189,7 +189,7 @@ class SupplierPart extends BaseController
             $owner = $ownerOf($supplierName);
 
             if (!$owner) {
-                $warnings[] = "第 {$lineNo} 行：供应商「{$supplierName}」未绑定提交人账号，未生成方案草稿";
+                $warnings[] = "第 {$lineNo} 行：供应商「{$supplierName}」未绑定供应商账号，未生成方案草稿";
                 continue;
             }
 

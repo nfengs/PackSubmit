@@ -3,7 +3,7 @@
     <div class="page-toolbar">
       <el-input
         v-model="query.keyword"
-        placeholder="供应商名称 / 代码 / 联系人"
+        placeholder="供应商名称 / 代码"
         clearable
         style="width: 240px"
         @keyup.enter="handleSearch"
@@ -15,6 +15,8 @@
       <el-button type="primary" @click="handleSearch">查询</el-button>
       <el-button @click="handleReset">重置</el-button>
       <div class="spacer" />
+      <el-button @click="handleTemplate">下载模板</el-button>
+      <el-button type="warning" plain @click="openImport">批量导入</el-button>
       <el-button type="primary" @click="openCreate">
         <el-icon><Plus /></el-icon>
         新增供应商
@@ -22,13 +24,9 @@
     </div>
 
     <el-table v-loading="loading" :data="list" border stripe>
-      <el-table-column prop="name" label="供应商名称" min-width="140" show-overflow-tooltip />
-      <el-table-column prop="code" label="供应商代码" width="130" />
-      <el-table-column prop="address" label="供应商地址" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="contact" label="联系人" width="110" />
-      <el-table-column prop="phone" label="联系电话" width="140" />
-      <el-table-column prop="email" label="电子邮箱" min-width="170" show-overflow-tooltip />
-      <el-table-column prop="fax" label="传真" width="130" />
+      <el-table-column prop="name" label="供应商名称" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="code" label="供应商代码" width="140" />
+      <el-table-column prop="address" label="供应商地址" min-width="260" show-overflow-tooltip />
       <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
           <el-tag size="small" :type="Number(row.status) === 1 ? 'success' : 'info'">
@@ -76,7 +74,7 @@
         type="info"
         :closable="false"
         show-icon
-        title="供应商名称需与提交人账号的“部门/供应商”一致，提交人才能使用该供应商提交方案"
+        title="供应商名称需与供应商账号的“部门/供应商”一致，供应商才能使用该供应商提交方案"
         style="margin-bottom: 16px"
       />
       <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
@@ -88,18 +86,6 @@
         </el-form-item>
         <el-form-item label="供应商地址" prop="address">
           <el-input v-model="form.address" maxlength="255" placeholder="请输入供应商地址" />
-        </el-form-item>
-        <el-form-item label="联系人" prop="contact">
-          <el-input v-model="form.contact" maxlength="50" placeholder="请输入联系人" />
-        </el-form-item>
-        <el-form-item label="联系电话" prop="phone">
-          <el-input v-model="form.phone" maxlength="30" placeholder="请输入联系电话" />
-        </el-form-item>
-        <el-form-item label="电子邮箱" prop="email">
-          <el-input v-model="form.email" maxlength="100" placeholder="请输入电子邮箱" />
-        </el-form-item>
-        <el-form-item label="传真" prop="fax">
-          <el-input v-model="form.fax" maxlength="30" placeholder="请输入传真" />
         </el-form-item>
         <el-form-item label="状态">
           <el-switch v-model="form.status" :active-value="1" :inactive-value="0" />
@@ -129,13 +115,55 @@
         <el-button @click="logVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="importVisible" title="批量导入供应商" width="560px" destroy-on-close>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="Excel 列顺序：供应商名称、供应商代码、供应商地址（首行表头自动识别）。名称已存在则更新代码与地址。"
+        style="margin-bottom: 16px"
+      />
+      <el-upload
+        ref="importRef"
+        drag
+        action="#"
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xls"
+        :on-change="handleImportFileChange"
+        :on-remove="handleImportFileRemove"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">将 Excel 拖到此处，或<em>点击选择文件</em></div>
+        <template #tip>
+          <div class="el-upload__tip">仅支持 .xlsx / .xls，文件不超过 10MB</div>
+        </template>
+      </el-upload>
+
+      <div v-if="importResult" class="import-result">
+        <p>
+          导入完成：新增 <strong>{{ importResult.inserted }}</strong> 条，更新
+          <strong>{{ importResult.updated }}</strong> 条，跳过
+          <strong>{{ importResult.skipped }}</strong> 条
+        </p>
+        <ul v-if="importResult.errors && importResult.errors.length">
+          <li v-for="(item, index) in importResult.errors" :key="index">{{ item }}</li>
+        </ul>
+      </div>
+
+      <template #footer>
+        <el-button @click="importVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="importing" @click="handleImport">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus } from '@element-plus/icons-vue';
+import { Plus, UploadFilled } from '@element-plus/icons-vue';
 import {
   getSupplierList,
   createSupplier,
@@ -143,12 +171,22 @@ import {
   deleteSupplier,
   checkSupplierName,
   getSupplierLogs,
+  importSuppliers,
+  downloadSupplierTemplate,
 } from '@/api/admin';
+import { resolveFileName } from '@/api/attachment';
 
 const loading = ref(false);
 const saving = ref(false);
 const list = ref([]);
 const total = ref(0);
+
+/** 批量导入 */
+const importVisible = ref(false);
+const importRef = ref(null);
+const importFile = ref(null);
+const importing = ref(false);
+const importResult = ref(null);
 
 const query = reactive({
   keyword: '',
@@ -171,10 +209,6 @@ const form = reactive({
   name: '',
   code: '',
   address: '',
-  contact: '',
-  phone: '',
-  email: '',
-  fax: '',
   status: 1,
 });
 
@@ -206,7 +240,6 @@ const rules = {
     { required: true, message: '请输入供应商名称', trigger: 'blur' },
     { validator: validateNameUnique, trigger: 'blur' },
   ],
-  email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
 };
 
 async function loadList() {
@@ -239,10 +272,6 @@ function openCreate() {
     name: '',
     code: '',
     address: '',
-    contact: '',
-    phone: '',
-    email: '',
-    fax: '',
     status: 1,
   });
   formVisible.value = true;
@@ -254,10 +283,6 @@ function openEdit(row) {
     name: row.name,
     code: row.code || '',
     address: row.address || '',
-    contact: row.contact || '',
-    phone: row.phone || '',
-    email: row.email || '',
-    fax: row.fax || '',
     status: Number(row.status),
   });
   formVisible.value = true;
@@ -274,10 +299,6 @@ async function handleSave() {
       name: String(form.name || '').trim(),
       code: form.code,
       address: form.address,
-      contact: form.contact,
-      phone: form.phone,
-      email: form.email,
-      fax: form.fax,
       status: Number(form.status),
     };
 
@@ -298,7 +319,7 @@ async function handleSave() {
 
 async function handleDelete(row) {
   await ElMessageBox.confirm(
-    `确定删除供应商「${row.name}」吗？已被方案使用或仍有提交人账号在用的供应商不允许删除。`,
+    `确定删除供应商「${row.name}」吗？已被方案使用或仍有供应商账号在用的供应商不允许删除。`,
     '删除供应商',
     { type: 'warning' },
   );
@@ -325,11 +346,77 @@ async function openLogs(row) {
   }
 }
 
+function openImport() {
+  importResult.value = null;
+  importFile.value = null;
+  importRef.value?.clearFiles();
+  importVisible.value = true;
+}
+
+function handleImportFileChange(file) {
+  importFile.value = file.raw;
+}
+
+function handleImportFileRemove() {
+  importFile.value = null;
+}
+
+async function handleImport() {
+  if (!importFile.value) {
+    ElMessage.warning('请选择要导入的 Excel 文件');
+    return;
+  }
+
+  importing.value = true;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', importFile.value);
+
+    const data = await importSuppliers(formData);
+    importResult.value = data;
+
+    ElMessage.success(`导入完成：新增 ${data.inserted} 条，更新 ${data.updated} 条，跳过 ${data.skipped} 条`);
+    importFile.value = null;
+    importRef.value?.clearFiles();
+    loadList();
+  } finally {
+    importing.value = false;
+  }
+}
+
+async function handleTemplate() {
+  const response = await downloadSupplierTemplate();
+  const name = resolveFileName(response, '供应商导入模板.xlsx');
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 onMounted(loadList);
 </script>
 
 <style scoped>
 .row-log-btn {
   margin-left: 8px;
+}
+
+.import-result {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #f7f8fa;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.import-result ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #e6a23c;
 }
 </style>

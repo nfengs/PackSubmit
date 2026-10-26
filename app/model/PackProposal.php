@@ -130,7 +130,7 @@ class PackProposal extends Model
     }
 
     /**
-     * 关联：提交人
+     * 关联：供应商
      * @return BelongsTo
      */
     public function user(): BelongsTo

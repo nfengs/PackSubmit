@@ -69,7 +69,7 @@
           <StatusTag :status="row.status" />
         </template>
       </el-table-column>
-      <el-table-column label="提交人" width="110">
+      <el-table-column label="供应商" width="110">
         <template #default="{ row }">{{ row.user?.real_name || '-' }}</template>
       </el-table-column>
       <el-table-column prop="create_time" label="创建时间" width="170" align="center" />
@@ -267,7 +267,7 @@ async function handleExport() {
       规格尺寸: row.spec || '',
       数量: row.quantity ?? 0,
       供应商: row.supplier || '',
-      提交人: row.user?.real_name || '',
+      供应商: row.user?.real_name || '',
       版本: `V${row.version}`,
       状态: STATUS_MAP[Number(row.status)]?.label || '',
       提交时间: row.submit_time || '',

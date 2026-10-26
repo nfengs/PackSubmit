@@ -8,7 +8,7 @@
             <StatusTag :status="detail.status" />
           </h2>
           <p class="text-muted">
-            {{ detail.proposal_no }} · 版本 V{{ detail.version }} · 提交人
+            {{ detail.proposal_no }} · 版本 V{{ detail.version }} · 供应商
             {{ detail.user?.real_name || '-' }}
           </p>
         </div>

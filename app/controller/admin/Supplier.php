@@ -12,6 +12,10 @@ use app\model\User;
 use app\service\AuditService;
 use app\service\MasterLogService;
 use app\validate\SupplierValidate;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use think\facade\Db;
 use think\response\Json;
 
@@ -20,6 +24,8 @@ use think\response\Json;
  */
 class Supplier extends BaseController
 {
+    /** 导入模板表头 */
+    protected const HEADERS = ['供应商名称', '供应商代码', '供应商地址'];
     /**
      * 供应商档案列表
      * @return Json
@@ -29,15 +35,14 @@ class Supplier extends BaseController
         $page     = max(1, (int) $this->request->param('page', 1));
         $pageSize = min(100, max(1, (int) $this->request->param('page_size', 10)));
 
-        $query = SupplierModel::field('id,name,code,address,contact,phone,email,fax,status,create_time,update_time');
+        $query = SupplierModel::field('id,name,code,address,status,create_time,update_time');
 
         $keyword = trim((string) $this->request->param('keyword', ''));
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
                 $like = '%' . $keyword . '%';
                 $q->whereLike('name', $like)
-                    ->whereOr('code', 'like', $like)
-                    ->whereOr('contact', 'like', $like);
+                    ->whereOr('code', 'like', $like);
             });
         }
 
@@ -65,7 +70,7 @@ class Supplier extends BaseController
      */
     public function save(): Json
     {
-        $data = $this->request->only(['name', 'code', 'address', 'contact', 'phone', 'email', 'fax', 'status']);
+        $data = $this->request->only(['name', 'code', 'address', 'status']);
         $this->validate($data, SupplierValidate::class);
 
         $name = $this->normalizeName((string) $data['name']);
@@ -76,10 +81,6 @@ class Supplier extends BaseController
                 'name'    => $name,
                 'code'    => (string) ($data['code'] ?? ''),
                 'address' => (string) ($data['address'] ?? ''),
-                'contact' => (string) ($data['contact'] ?? ''),
-                'phone'   => (string) ($data['phone'] ?? ''),
-                'email'   => (string) ($data['email'] ?? ''),
-                'fax'     => (string) ($data['fax'] ?? ''),
                 'status'  => (int) ($data['status'] ?? SupplierModel::STATUS_ENABLED),
             ]);
         } catch (\Throwable $e) {
@@ -106,7 +107,7 @@ class Supplier extends BaseController
 
     /**
      * 编辑供应商
-     * 名称变更时同步提交人账号的「部门/供应商」，保证供应商归属不断链
+     * 名称变更时同步供应商账号的「部门/供应商」，保证供应商归属不断链
      * @param int $id
      * @return Json
      * @throws BizException
@@ -116,7 +117,7 @@ class Supplier extends BaseController
     public function update(int $id): Json
     {
         $supplier = $this->findSupplier($id);
-        $data     = $this->request->only(['name', 'code', 'address', 'contact', 'phone', 'email', 'fax', 'status']);
+        $data     = $this->request->only(['name', 'code', 'address', 'status']);
         $this->validate($data, SupplierValidate::class);
 
         $name     = $this->normalizeName((string) $data['name']);
@@ -133,10 +134,6 @@ class Supplier extends BaseController
                     'name'    => $name,
                     'code'    => (string) ($data['code'] ?? ''),
                     'address' => (string) ($data['address'] ?? ''),
-                    'contact' => (string) ($data['contact'] ?? ''),
-                    'phone'   => (string) ($data['phone'] ?? ''),
-                    'email'   => (string) ($data['email'] ?? ''),
-                    'fax'     => (string) ($data['fax'] ?? ''),
                     'status'  => (int) ($data['status'] ?? $supplier->status),
                 ]);
 
@@ -190,6 +187,211 @@ class Supplier extends BaseController
     }
 
     /**
+     * Excel 批量导入供应商（名称重复按不区分大小写匹配，更新代码与地址）
+     * 列顺序：供应商名称、供应商代码、供应商地址（首行表头自动识别）
+     * @return Json
+     * @throws BizException
+     * @throws \Throwable
+     */
+    public function import(): Json
+    {
+        $rows = $this->readSupplierRows($this->request->file('file'));
+
+        if ($rows === []) {
+            throw new BizException('Excel 内容为空');
+        }
+
+        $operator = $this->currentUser();
+        $inserted = 0;
+        $updated  = 0;
+        $skipped  = 0;
+        $errors   = [];
+
+        foreach ($rows as $row) {
+            $lineNo  = $row['line'];
+            $name    = $row['name'];
+            $code    = $row['code'];
+            $address = $row['address'];
+
+            if ($name === '') {
+                $skipped++;
+                $errors[] = "第 {$lineNo} 行：供应商名称为空";
+                continue;
+            }
+
+            if (mb_strlen($name) > 100 || mb_strlen($code) > 50 || mb_strlen($address) > 255) {
+                $skipped++;
+                $errors[] = "第 {$lineNo} 行：内容超过字段长度限制";
+                continue;
+            }
+
+            $name     = $this->normalizeName($name);
+            $lower    = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+            $existing = SupplierModel::whereRaw('LOWER(`name`) = ?', [$lower])->find();
+
+            if ($existing) {
+                $before = $existing->toArray();
+
+                $existing->save([
+                    'code'    => $code,
+                    'address' => $address,
+                ]);
+
+                $changes = MasterLogService::changes(MasterLog::BIZ_SUPPLIER, $before, $existing->toArray());
+
+                if ($changes !== []) {
+                    MasterLogService::record(
+                        MasterLog::BIZ_SUPPLIER,
+                        (int) $existing->id,
+                        (string) $existing->name,
+                        (int) $operator->id,
+                        'supplier_update',
+                        implode('；', $changes)
+                    );
+                }
+
+                $updated++;
+            } else {
+                $supplier = SupplierModel::create([
+                    'name'    => $name,
+                    'code'    => $code,
+                    'address' => $address,
+                    'status'  => SupplierModel::STATUS_ENABLED,
+                ]);
+
+                MasterLogService::record(
+                    MasterLog::BIZ_SUPPLIER,
+                    (int) $supplier->id,
+                    (string) $supplier->name,
+                    (int) $operator->id,
+                    'supplier_create',
+                    MasterLogService::createContent(MasterLog::BIZ_SUPPLIER, $supplier->toArray())
+                );
+
+                $inserted++;
+            }
+        }
+
+        AuditService::record((int) $operator->id, 'supplier_import', 0, [
+            'content' => "批量导入供应商：新增 {$inserted} 条，更新 {$updated} 条，跳过 {$skipped} 条",
+        ]);
+
+        return $this->success([
+            'inserted' => $inserted,
+            'updated'  => $updated,
+            'skipped'  => $skipped,
+            'errors'   => array_slice($errors, 0, 20),
+        ], '导入完成');
+    }
+
+    /**
+     * 下载供应商导入模板
+     * @return \think\Response
+     * @throws \Throwable
+     */
+    public function template(): \think\Response
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet       = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('供应商');
+
+        foreach (self::HEADERS as $index => $title) {
+            $column = Coordinate::stringFromColumnIndex($index + 1);
+            $sheet->setCellValue($column . '1', $title);
+            $sheet->getColumnDimension($column)->setWidth(24);
+        }
+
+        $sheet->setCellValue('A2', '示例供应商');
+        $sheet->setCellValue('B2', 'SUP001');
+        $sheet->setCellValue('C2', '江苏省苏州市工业园区示例路 1 号');
+
+        $sheet->getStyle('A1:C1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:C1')->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('FFEFF4FF');
+
+        $file = tempnam(sys_get_temp_dir(), 'supplier_template_') . '.xlsx';
+        (new Xlsx($spreadsheet))->save($file);
+        $spreadsheet->disconnectWorksheets();
+
+        $content = (string) @file_get_contents($file);
+        @unlink($file);
+
+        return response($content)
+            ->contentType('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->header([
+                'Content-Disposition' => "attachment; filename*=UTF-8''" . rawurlencode('供应商导入模板.xlsx'),
+                'Content-Length'      => (string) strlen($content),
+            ]);
+    }
+
+    /**
+     * 读取供应商导入 Excel
+     * @param mixed $file
+     * @return array<int, array{line:int,name:string,code:string,address:string}>
+     * @throws BizException
+     */
+    protected function readSupplierRows($file): array
+    {
+        if (!$file) {
+            throw new BizException('请上传 Excel 文件');
+        }
+
+        $ext = strtolower((string) $file->getOriginalExtension());
+
+        if (!in_array($ext, ['xlsx', 'xls'], true)) {
+            throw new BizException('仅支持 .xlsx / .xls 格式');
+        }
+
+        if ((int) $file->getSize() > 10 * 1024 * 1024) {
+            throw new BizException('文件大小不能超过 10MB');
+        }
+
+        try {
+            $reader = IOFactory::createReader($ext === 'xls' ? 'Xls' : 'Xlsx');
+            $reader->setReadDataOnly(true);
+            $rows = $reader->load($file->getPathname())->getActiveSheet()->toArray(null, true, true, false);
+        } catch (\Throwable $e) {
+            throw new BizException('Excel 解析失败：' . $e->getMessage());
+        }
+
+        if (!$rows) {
+            throw new BizException('Excel 内容为空');
+        }
+
+        $start    = 0;
+        $firstRow = array_map(static fn ($cell) => trim((string) $cell), $rows[0] ?? []);
+
+        if (mb_strpos((string) ($firstRow[0] ?? ''), '供应商') !== false) {
+            $start = 1;
+        }
+
+        $list = [];
+
+        foreach (array_slice($rows, $start) as $index => $row) {
+            $cells = array_map(
+                static fn ($cell) => trim((string) $cell),
+                array_pad(array_slice($row, 0, 3), 3, '')
+            );
+
+            [$name, $code, $address] = $cells;
+
+            if ($name === '' && $code === '' && $address === '') {
+                continue;
+            }
+
+            $list[] = [
+                'line'    => $start + $index + 1,
+                'name'    => $name,
+                'code'    => $code,
+                'address' => $address,
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
      * 删除供应商
      * @param int $id
      * @return Json
@@ -204,7 +406,7 @@ class Supplier extends BaseController
         }
 
         if (User::where('dept', $supplier->name)->count() > 0) {
-            throw new BizException('该供应商仍有提交人账号在用，不能删除');
+            throw new BizException('该供应商仍有供应商账号在用，不能删除');
         }
 
         $name = (string) $supplier->name;

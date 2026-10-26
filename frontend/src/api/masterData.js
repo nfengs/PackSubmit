@@ -10,14 +10,14 @@ export function getSuppliers() {
   return request.get('/master-data/suppliers');
 }
 
-/** 当前登录用户所属供应商档案（提交人仅能使用该供应商） */
+/** 当前登录用户所属供应商档案（供应商仅能使用该供应商） */
 export function getMySupplier() {
   return request.get('/master-data/my-supplier');
 }
 
 /**
  * 供应商指定零件号
- * @param {string} [supplier] 供应商名称，提交人可不传（默认自己所属供应商）
+ * @param {string} [supplier] 供应商名称，供应商可不传（默认自己所属供应商）
  */
 export function getSupplierParts(supplier = '') {
   return request.get('/master-data/parts', { params: { supplier } });

@@ -43,7 +43,7 @@
           <StatusTag :status="row.status" />
         </template>
       </el-table-column>
-      <el-table-column v-if="showOwner" label="提交人" width="110">
+      <el-table-column v-if="showOwner" label="供应商" width="110">
         <template #default="{ row }">{{ row.user?.real_name || '-' }}</template>
       </el-table-column>
       <el-table-column prop="update_time" label="更新时间" width="170" align="center" />
@@ -180,7 +180,7 @@ const canCreate = computed(() => !userStore.isReviewer);
 const showOwner = computed(() => !userStore.isSubmitter);
 
 /**
- * 按钮权限：编辑（提交人/管理员，草稿或驳回）
+ * 按钮权限：编辑（供应商/管理员，草稿或驳回）
  */
 function canEdit(row) {
   return (
@@ -195,7 +195,7 @@ function canSubmit(row) {
 }
 
 /**
- * 按钮权限：撤回（提交人/管理员，待评审）
+ * 按钮权限：撤回（供应商/管理员，待评审）
  */
 function canWithdraw(row) {
   return (
@@ -221,7 +221,7 @@ function canDelete(row) {
 }
 
 /**
- * 按钮权限：发起变更（提交人/管理员，已归档）
+ * 按钮权限：发起变更（供应商/管理员，已归档）
  */
 function canChange(row) {
   return (
