@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { ElMessage } from 'element-plus';
-import { getToken, removeToken } from './auth';
+import { getToken, removeToken, setToken } from './auth';
 
 /**
  * 统一 axios 实例
@@ -34,6 +34,62 @@ function redirectToLogin() {
   window.location.href = `/login?redirect=${redirect}`;
 }
 
+/** 刷新 token 的共享 Promise，避免并发请求重复刷新 */
+let refreshing = null;
+
+/**
+ * 使用当前 token 换取新 token
+ * @returns {Promise<string>}
+ */
+function refreshToken() {
+  if (!refreshing) {
+    refreshing = axios
+      .post(`${service.defaults.baseURL}/auth/refresh`, null, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+        timeout: 15000,
+      })
+      .then((response) => {
+        const payload = response.data || {};
+        const newToken = payload.data?.token;
+
+        if (payload.code === 1 && newToken) {
+          setToken(newToken);
+          return newToken;
+        }
+
+        throw new Error(payload.msg || '登录状态已失效');
+      })
+      .finally(() => {
+        refreshing = null;
+      });
+  }
+
+  return refreshing;
+}
+
+/**
+ * 401 时静默续期并重放原请求
+ * @param {object} config 原请求配置
+ * @returns {Promise<any>|null} 重放结果；null 表示无法续期
+ */
+async function retryWithRefresh(config) {
+  if (!config || config._retried || !getToken()) return null;
+
+  const url = String(config.url || '');
+
+  if (url.includes('/auth/refresh') || url.includes('/auth/login')) return null;
+
+  config._retried = true;
+
+  try {
+    const token = await refreshToken();
+    config.headers = { ...(config.headers || {}), Authorization: `Bearer ${token}` };
+    return await service(config);
+  } catch (e) {
+    return null;
+  }
+}
+
 // 响应拦截：统一处理 code / 401 / 403
 service.interceptors.response.use(
   (response) => {
@@ -51,35 +107,40 @@ service.interceptors.response.use(
     ElMessage.error(res.msg || '操作失败');
     return Promise.reject(new Error(res.msg || '操作失败'));
   },
-  (error) => {
+  async (error) => {
     const status = error.response?.status;
     const data = error.response?.data;
 
+    // 登录态失效：先尝试静默续期并重放请求
+    if (status === 401) {
+      const retried = await retryWithRefresh(error.config);
+
+      if (retried) return retried;
+    }
+
     // 文件流请求（导出/下载/预览）出错时，后端返回的 JSON 被包成了 Blob，需要解析后再提示
     if (data instanceof Blob) {
-      data.text().then((text) => {
-        let blobMsg = '';
+      const text = await data.text();
+      let blobMsg = '';
 
-        try {
-          blobMsg = JSON.parse(text)?.msg || '';
-        } catch (e) {
-          blobMsg = '';
-        }
+      try {
+        blobMsg = JSON.parse(text)?.msg || '';
+      } catch (e) {
+        blobMsg = '';
+      }
 
-        if (status === 401) {
-          ElMessage.warning(blobMsg || '登录已失效，请重新登录');
-          redirectToLogin();
-          return;
-        }
+      if (status === 401) {
+        ElMessage.warning(blobMsg || '登录已失效，请重新登录');
+        redirectToLogin();
+        return Promise.reject(error);
+      }
 
-        if (status === 403) {
-          ElMessage.error(blobMsg || '无权限执行该操作');
-          return;
-        }
+      if (status === 403) {
+        ElMessage.error(blobMsg || '无权限执行该操作');
+        return Promise.reject(error);
+      }
 
-        ElMessage.error(blobMsg || (status === 404 ? '文件或接口不存在' : '操作失败，请稍后重试'));
-      });
-
+      ElMessage.error(blobMsg || (status === 404 ? '文件或接口不存在' : '操作失败，请稍后重试'));
       return Promise.reject(error);
     }
 

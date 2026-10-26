@@ -41,7 +41,7 @@ class Proposal extends BaseController
         $keyword = trim((string) $this->request->param('keyword', ''));
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
-                $like = '%' . $keyword . '%';
+                $like = '%' . like_escape($keyword) . '%';
                 $q->whereLike('proposal_no', $like)
                     ->whereOr('part_name', 'like', $like)
                     ->whereOr('part_no', 'like', $like);
@@ -239,9 +239,11 @@ class Proposal extends BaseController
             throw new BizException('方案不存在或已被删除', 0, 404);
         }
 
+        // 以已有数据为基准重算规格尺寸 / 数量 / 每托盘零件数
         $data = ProposalService::deriveFields(
             $this->request->only(ProposalService::EDITABLE_FIELDS),
-            false
+            false,
+            $proposal->toArray()
         );
         $this->validate($data, ProposalValidate::class);
 

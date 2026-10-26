@@ -35,7 +35,7 @@ class Dict extends BaseController
         $keyword = trim((string) $this->request->param('keyword', ''));
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
-                $like = '%' . $keyword . '%';
+                $like = '%' . like_escape($keyword) . '%';
                 $q->whereLike('dict_label', $like)
                     ->whereOr('dict_value', 'like', $like);
             });

@@ -42,6 +42,16 @@ export const useUserStore = defineStore('user', {
       return data;
     },
 
+    /**
+     * 更新本地 token（改密后补发、静默刷新）
+     * @param {string} token
+     */
+    applyToken(token) {
+      if (!token) return;
+      this.token = token;
+      setToken(token);
+    },
+
     /** 拉取当前用户信息（刷新页面后恢复会话） */
     async fetchProfile() {
       const data = await getProfile();

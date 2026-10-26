@@ -10,6 +10,7 @@ use app\model\Supplier;
 use app\model\User as UserModel;
 use app\service\AuditService;
 use app\service\MasterLogService;
+use app\service\PasswordPolicy;
 use app\validate\UserValidate;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -38,7 +39,7 @@ class User extends BaseController
         $keyword = trim((string) $this->request->param('keyword', ''));
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
-                $like = '%' . $keyword . '%';
+                $like = '%' . like_escape($keyword) . '%';
                 $q->whereLike('username', $like)
                     ->whereOr('real_name', 'like', $like)
                     ->whereOr('dept', 'like', $like);
@@ -80,6 +81,8 @@ class User extends BaseController
         if (UserModel::where('username', $data['username'])->find()) {
             throw new BizException('登录账号已存在');
         }
+
+        PasswordPolicy::assert((string) $data['password']);
 
         $this->assertSupplierDept($data);
 
@@ -217,8 +220,14 @@ class User extends BaseController
         $data = $this->request->only(['password']);
         $this->validate($data, UserValidate::class . '.reset');
 
+        PasswordPolicy::assert((string) $data['password']);
+
         $user = $this->findUser($id);
-        $user->save(['password' => $data['password']]);
+        // 重置密码同时吊销该用户已签发的 token
+        $user->save([
+            'password'      => $data['password'],
+            'token_version' => (int) $user->token_version + 1,
+        ]);
 
         AuditService::record($this->userId(), 'user_reset', 0, [
             'content' => '重置用户密码：' . $user->username,
@@ -329,10 +338,14 @@ class User extends BaseController
                 continue;
             }
 
-            if ($password !== '' && (mb_strlen($password) < 6 || mb_strlen($password) > 32)) {
-                $skipped++;
-                $errors[] = "第 {$lineNo} 行：密码长度须为 6–32 位";
-                continue;
+            if ($password !== '') {
+                try {
+                    PasswordPolicy::assert($password);
+                } catch (BizException $e) {
+                    $skipped++;
+                    $errors[] = "第 {$lineNo} 行：" . $e->getMessage();
+                    continue;
+                }
             }
 
             if ($role === UserModel::ROLE_SUBMITTER) {
@@ -372,7 +385,10 @@ class User extends BaseController
                 ]);
 
                 if ($password !== '') {
-                    $existing->save(['password' => $password]);
+                    $existing->save([
+                        'password'      => $password,
+                        'token_version' => (int) $existing->token_version + 1,
+                    ]);
                 }
 
                 $changes = MasterLogService::changes(MasterLog::BIZ_USER, $before, $existing->toArray());

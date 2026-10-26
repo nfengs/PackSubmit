@@ -40,7 +40,7 @@ class Supplier extends BaseController
         $keyword = trim((string) $this->request->param('keyword', ''));
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
-                $like = '%' . $keyword . '%';
+                $like = '%' . like_escape($keyword) . '%';
                 $q->whereLike('name', $like)
                     ->whereOr('code', 'like', $like);
             });

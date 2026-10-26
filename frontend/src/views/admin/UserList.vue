@@ -283,7 +283,11 @@ const formRules = computed(() => ({
       message: '请输入初始密码',
       trigger: 'blur',
     },
-    { min: 6, message: '密码长度不能少于 6 位', trigger: 'blur' },
+    {
+      pattern: /^(?=.*[A-Za-z])(?=.*\d)[^\s]{8,32}$/,
+      message: '密码需 8-32 位，且同时包含字母和数字',
+      trigger: 'blur',
+    },
   ],
   real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
@@ -307,7 +311,11 @@ const resetForm = reactive({ id: 0, username: '', password: '' });
 const resetRules = {
   password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于 6 位', trigger: 'blur' },
+    {
+      pattern: /^(?=.*[A-Za-z])(?=.*\d)[^\s]{8,32}$/,
+      message: '密码需 8-32 位，且同时包含字母和数字',
+      trigger: 'blur',
+    },
   ],
 };
 

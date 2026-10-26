@@ -224,6 +224,11 @@ class ProposalService
         $data = self::applySupplierScope($data, $user);
         $data = self::applyPartScope($data, $user);
 
+        // 供应商 + 零件号是唯一性校验的基础，缺失时直接拒绝，避免生成孤儿方案
+        if (trim((string) ($data['supplier'] ?? '')) === '' || trim((string) ($data['part_no'] ?? '')) === '') {
+            throw new BizException('请填写供应商与零件号');
+        }
+
         return Db::transaction(function () use ($data, $user) {
             // 同一供应商同一零件，未归档期间只允许存在一种方案
             self::assertPartUnique($data);
@@ -547,17 +552,17 @@ class ProposalService
             return;
         }
 
-        $relativeDir = 'storage/attachments/' . date('Ym');
-        $saveDir     = public_path() . str_replace('/', DIRECTORY_SEPARATOR, $relativeDir);
+        $relativeDir = Attachment::STORAGE_DIR . '/' . date('Ym');
+        $saveDir     = Attachment::diskPath($relativeDir);
 
         if (!is_dir($saveDir) && !mkdir($saveDir, 0755, true) && !is_dir($saveDir)) {
             return;
         }
 
         foreach ($attachments as $item) {
-            $srcPath = public_path() . str_replace('/', DIRECTORY_SEPARATOR, (string) $item->file_path);
+            $srcPath = Attachment::diskPath((string) $item->file_path);
 
-            if (!is_file($srcPath)) {
+            if ($srcPath === '' || !is_file($srcPath)) {
                 continue;
             }
 
@@ -982,13 +987,15 @@ class ProposalService
     }
 
     /**
-     * 补齐不在表单中展示的字段（规格尺寸/数量）
+     * 补齐自动计算字段（规格尺寸 / 数量 / 每托盘零件数）
+     * 这三类字段一律由服务端计算，忽略前端传入值
      * @param array $data  请求数据
      * @param bool  $force 缺失字段是否也补齐：新增 true，编辑 false
+     * @param array $base  已有方案数据（编辑时用于补齐未提交字段）
      * @return array
      * @throws BizException 尺寸带小数时拒绝写入
      */
-    public static function deriveFields(array $data, bool $force = true): array
+    public static function deriveFields(array $data, bool $force = true, array $base = []): array
     {
         // 填写日期固定为当天，不允许修改
         $data['write_date'] = date('Y-m-d');
@@ -1032,32 +1039,45 @@ class ProposalService
             }
         }
 
-        if (($force || array_key_exists('spec', $data)) && trim((string) ($data['spec'] ?? '')) === '') {
-            $length = (float) ($data['box_size_l'] ?? 0);
-            $width  = (float) ($data['box_size_w'] ?? 0);
-            $height = (float) ($data['box_size_h'] ?? 0);
+        // 自动计算字段不接受前端传值，一律由服务端重算
+        unset($data['spec'], $data['quantity']);
 
-            if ($length > 0 && $width > 0 && $height > 0) {
-                $data['spec'] = self::trimZero($length) . '*'
-                    . self::trimZero($width) . '*'
-                    . self::trimZero($height) . 'mm';
-            }
+        $length = (float) ($data['box_size_l'] ?? $base['box_size_l'] ?? 0);
+        $width  = (float) ($data['box_size_w'] ?? $base['box_size_w'] ?? 0);
+        $height = (float) ($data['box_size_h'] ?? $base['box_size_h'] ?? 0);
+
+        $hasBoxSize = array_key_exists('box_size_l', $data)
+            || array_key_exists('box_size_w', $data)
+            || array_key_exists('box_size_h', $data)
+            || (float) ($base['box_size_l'] ?? 0) > 0
+            || (float) ($base['box_size_w'] ?? 0) > 0
+            || (float) ($base['box_size_h'] ?? 0) > 0;
+
+        if ($hasBoxSize) {
+            $data['spec'] = $length > 0 && $width > 0 && $height > 0
+                ? self::trimZero($length) . '*' . self::trimZero($width) . '*' . self::trimZero($height) . 'mm'
+                : '';
+        } elseif ($force) {
+            $data['spec'] = '';
         }
 
-        if (($force || array_key_exists('quantity', $data)) && (int) ($data['quantity'] ?? 0) <= 0) {
-            $quantity = (int) ($data['packing_qty'] ?? 0);
+        $packingQty = (int) ($data['packing_qty'] ?? $base['packing_qty'] ?? 0);
 
-            if ($quantity > 0) {
-                $data['quantity'] = $quantity;
-            }
+        if (array_key_exists('packing_qty', $data) || (int) ($base['packing_qty'] ?? 0) > 0) {
+            // 数量 = 存放数量（件/箱）
+            $data['quantity'] = $packingQty;
+        } elseif ($force) {
+            $data['quantity'] = 0;
         }
 
         // 每托盘零件数量 = 每层包装箱数量 × 堆码层数 × 存放数量（件/箱），不允许手工填写
-        if ((int) ($data['with_pallet'] ?? 0) === 1
-            && isset($data['pallet_layer_qty'], $data['pallet_layer_count'], $data['packing_qty'])) {
-            $data['pallet_parts_qty'] = (int) $data['pallet_layer_qty']
-                * (int) $data['pallet_layer_count']
-                * (int) $data['packing_qty'];
+        $withPallet = array_key_exists('with_pallet', $data) ? $data['with_pallet'] : ($base['with_pallet'] ?? null);
+
+        if ((int) $withPallet === 1) {
+            $layerQty   = (int) ($data['pallet_layer_qty'] ?? $base['pallet_layer_qty'] ?? 0);
+            $layerCount = (int) ($data['pallet_layer_count'] ?? $base['pallet_layer_count'] ?? 0);
+
+            $data['pallet_parts_qty'] = $layerQty * $layerCount * $packingQty;
         }
 
         return $data;

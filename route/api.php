@@ -12,6 +12,8 @@ Route::group('api', function () {
 
     // -------------------- 公共接口（无需登录） --------------------
     Route::post('auth/login', 'Auth/login');
+    // 刷新 token：允许在 JWT_REFRESH_TTL 内用过期 token 换取新 token（旧 token 加入黑名单）
+    Route::post('auth/refresh', 'Auth/refresh');
 
     // -------------------- 需登录接口 --------------------
     Route::group(function () {

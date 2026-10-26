@@ -110,8 +110,8 @@ class Attachment extends BaseController
             }
         }
 
-        $relativeDir = 'storage/attachments/' . date('Ym');
-        $saveDir     = public_path() . str_replace('/', DIRECTORY_SEPARATOR, $relativeDir);
+        $relativeDir = AttachmentModel::STORAGE_DIR . '/' . date('Ym');
+        $saveDir     = AttachmentModel::diskPath($relativeDir);
 
         // 移动前读取文件元信息与内容 MD5（move 后临时文件已不存在）
         $originalName = $file->getOriginalName();
@@ -126,14 +126,16 @@ class Attachment extends BaseController
         $relativePath = '';
 
         if ($md5 !== '') {
-            $existing = AttachmentModel::where('md5', $md5)->order('id', 'asc')->find();
+            // 取第一条物理文件仍存在的记录复用（历史记录的文件可能已被清理）
+            $candidates = AttachmentModel::where('md5', $md5)->order('id', 'asc')->select();
 
-            if ($existing) {
-                $existingPath = public_path() . str_replace('/', DIRECTORY_SEPARATOR, (string) $existing->file_path);
+            foreach ($candidates as $candidate) {
+                $existingPath = AttachmentModel::diskPath((string) $candidate->file_path);
 
                 if (is_file($existingPath)) {
                     $reused       = true;
-                    $relativePath = (string) $existing->file_path;
+                    $relativePath = (string) $candidate->file_path;
+                    break;
                 }
             }
         }
@@ -242,17 +244,13 @@ class Attachment extends BaseController
             ProposalService::assertEditable($proposal, $user);
         }
 
-        $path = public_path() . str_replace('/', DIRECTORY_SEPARATOR, (string) $attachment->file_path);
-        $md5  = (string) $attachment->md5;
+        $path = AttachmentModel::diskPath((string) $attachment->file_path);
 
-        // 去重场景：仍被其他附件记录引用（同 file_path 或同 md5）时保留物理文件
-        $referenced = AttachmentModel::where(function ($query) use ($attachment, $md5) {
-            $query->where('file_path', (string) $attachment->file_path);
-
-            if ($md5 !== '') {
-                $query->whereOr('md5', $md5);
-            }
-        })->where('id', '<>', (int) $attachment->id)->count();
+        // 去重场景：仅按物理路径（file_path）统计引用，
+        // 避免历史记录 md5 相同但文件已丢失时阻止当前文件被清理
+        $referenced = AttachmentModel::where('file_path', (string) $attachment->file_path)
+            ->where('id', '<>', (int) $attachment->id)
+            ->count();
 
         if ($referenced === 0 && is_file($path)) {
             @unlink($path);
@@ -431,6 +429,6 @@ class Attachment extends BaseController
      */
     protected function absolutePath(AttachmentModel $attachment): string
     {
-        return public_path() . str_replace('/', DIRECTORY_SEPARATOR, (string) $attachment->file_path);
+        return AttachmentModel::diskPath((string) $attachment->file_path);
     }
 }

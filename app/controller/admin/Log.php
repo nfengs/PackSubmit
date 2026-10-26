@@ -41,8 +41,8 @@ class Log extends BaseController
         // 按操作人姓名/账号筛选
         $operator = trim((string) $this->request->param('operator', ''));
         if ($operator !== '') {
-            $userIds = \app\model\User::whereLike('username', '%' . $operator . '%')
-                ->whereOr('real_name', 'like', '%' . $operator . '%')
+            $userIds = \app\model\User::whereLike('username', '%' . like_escape($operator) . '%')
+                ->whereOr('real_name', 'like', '%' . like_escape($operator) . '%')
                 ->column('id');
 
             $query->whereIn('user_id', $userIds ?: [-1]);
@@ -60,7 +60,7 @@ class Log extends BaseController
 
         $keyword = trim((string) $this->request->param('keyword', ''));
         if ($keyword !== '') {
-            $query->whereLike('content', '%' . $keyword . '%');
+            $query->whereLike('content', '%' . like_escape($keyword) . '%');
         }
 
         $total = (clone $query)->count();

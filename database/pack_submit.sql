@@ -2,11 +2,12 @@
 -- 包装方案提交评审系统 数据库初始化脚本
 -- MySQL 5.7+ / 8.0+，字符集 utf8mb4，表前缀 pf_
 -- ----------------------------
+-- 用法：先创建并选择目标数据库，再执行本脚本，例如
+--   mysql -uroot -p -e "CREATE DATABASE pack_submit DEFAULT CHARACTER SET utf8mb4"
+--   mysql -uroot -p pack_submit < database/pack_submit.sql
+-- 注意：脚本会 DROP 并重建目标库中的 pf_* 表，请勿对生产库直接执行。
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
-
-CREATE DATABASE IF NOT EXISTS `pack_submit` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE `pack_submit`;
 
 -- ----------------------------
 -- 用户表
@@ -21,6 +22,7 @@ CREATE TABLE `pf_user` (
   `dept`        varchar(100) NOT NULL DEFAULT '' COMMENT '部门/供应商',
   `phone`       varchar(30)  NOT NULL DEFAULT '' COMMENT '联系电话',
   `status`      tinyint unsigned NOT NULL DEFAULT '1' COMMENT '状态 1启用 0禁用',
+  `token_version` int unsigned NOT NULL DEFAULT '1' COMMENT 'token 版本号（改密后递增，吊销旧 token）',
   `create_time` datetime DEFAULT NULL COMMENT '创建时间',
   `update_time` datetime DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`id`),
@@ -243,6 +245,41 @@ INSERT INTO `pf_supplier_contact` (`supplier_id`,`name`,`phone`,`email`,`fax`,`i
 (2,'李四','0574-60000002','sup_b@example.com','0574-60000008',1,NOW(),NOW()),
 (3,'王五','0551-60000003','sup_c@example.com','0551-60000007',1,NOW(),NOW()),
 (4,'孙六','0532-60000004','sup_d@example.com','0532-60000006',1,NOW(),NOW());
+
+-- ----------------------------
+-- 主数据维护日志
+-- ----------------------------
+DROP TABLE IF EXISTS `pf_master_log`;
+CREATE TABLE `pf_master_log` (
+  `id`          int unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `biz_type`    varchar(30)  NOT NULL DEFAULT '' COMMENT '业务类型 customer/supplier',
+  `target_id`   int unsigned NOT NULL DEFAULT '0' COMMENT '客户/供应商ID',
+  `target_name` varchar(150) NOT NULL DEFAULT '' COMMENT '名称快照',
+  `user_id`     int unsigned NOT NULL DEFAULT '0' COMMENT '操作人ID',
+  `action`      varchar(30)  NOT NULL DEFAULT '' COMMENT '动作标识',
+  `action_name` varchar(50)  NOT NULL DEFAULT '' COMMENT '动作名称',
+  `content`     varchar(1000) NOT NULL DEFAULT '' COMMENT '变更内容',
+  `create_time` datetime DEFAULT NULL COMMENT '操作时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_target` (`biz_type`,`target_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='主数据维护日志';
+
+-- ----------------------------
+-- 指定零件号修改日志
+-- ----------------------------
+DROP TABLE IF EXISTS `pf_part_log`;
+CREATE TABLE `pf_part_log` (
+  `id`            int unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `supplier_name` varchar(100) NOT NULL DEFAULT '' COMMENT '供应商名称',
+  `part_no`       varchar(100) NOT NULL DEFAULT '' COMMENT '零件号',
+  `user_id`       int unsigned NOT NULL DEFAULT '0' COMMENT '操作人ID',
+  `action`        varchar(30)  NOT NULL DEFAULT '' COMMENT '动作标识',
+  `action_name`   varchar(50)  NOT NULL DEFAULT '' COMMENT '动作名称',
+  `content`       varchar(1000) NOT NULL DEFAULT '' COMMENT '修改内容',
+  `create_time`   datetime DEFAULT NULL COMMENT '操作时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_supplier_part` (`supplier_name`,`part_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='指定零件号修改日志';
 
 -- ----------------------------
 -- 演示数据（可直接删除）

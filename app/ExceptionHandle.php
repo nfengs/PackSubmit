@@ -52,14 +52,44 @@ class ExceptionHandle extends Handle
      */
     public function render($request, Throwable $e): Response
     {
-        // 仅 API 请求返回 JSON，其余交给系统默认处理
-        if (!str_starts_with(ltrim($request->pathinfo(), '/'), 'api')) {
-            return parent::render($request, $e);
-        }
-
         [$code, $msg, $status] = $this->resolveException($e);
 
+        if (!str_starts_with(ltrim($request->pathinfo(), '/'), 'api')) {
+            return $this->renderHtml($status);
+        }
+
         return json(['code' => $code, 'msg' => $msg, 'data' => []], $status);
+    }
+
+    /**
+     * 非 API 请求的简洁错误页（不输出堆栈 / 服务器路径 / 调试面板）
+     * @param int $status
+     * @return Response
+     */
+    protected function renderHtml(int $status): Response
+    {
+        $title = match ($status) {
+            401     => '请先登录',
+            403     => '无权访问',
+            404     => '页面不存在',
+            429     => '请求过于频繁',
+            default => '服务器开小差了',
+        };
+
+        $status = in_array($status, [401, 403, 404, 429, 500], true) ? $status : 500;
+
+        $html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<title>' . $title . '</title><style>'
+            . 'html,body{height:100%;margin:0}body{display:flex;align-items:center;justify-content:center;'
+            . 'background:#f5f7fa;color:#303133;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}'
+            . '.box{text-align:center;padding:40px 56px;background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.06)}'
+            . 'h1{margin:0;font-size:56px;color:#909399}p{margin:12px 0 24px;font-size:16px}'
+            . 'a{color:#409eff;text-decoration:none;font-size:14px}a:hover{text-decoration:underline}'
+            . '</style></head><body><div class="box"><h1>' . $status . '</h1><p>' . $title . '</p>'
+            . '<a href="/">返回首页</a></div></body></html>';
+
+        return response($html, $status)->contentType('text/html');
     }
 
     /**

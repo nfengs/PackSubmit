@@ -41,6 +41,11 @@ class JwtAuth
             throw new BizException('账号已被禁用，请联系管理员', 403, 403);
         }
 
+        // 密码变更后 token 版本号递增，旧 token 全部失效
+        if ((int) ($payload['ver'] ?? 0) !== (int) $user->token_version) {
+            throw new BizException('登录状态已失效，请重新登录', 401, 401);
+        }
+
         // 注入当前登录用户
         $request->user = $user;
 

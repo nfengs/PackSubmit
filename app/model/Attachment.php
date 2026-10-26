@@ -52,6 +52,29 @@ class Attachment extends Model
         'image/jpeg' => 'jpg',
     ];
 
+    /**
+     * 附件存储目录（相对项目根目录）
+     * 位于 Web 根目录（public/）之外，附件只能通过带鉴权的接口访问
+     */
+    public const STORAGE_DIR = 'storage/attachments';
+
+    /**
+     * 附件相对路径转物理路径
+     * 仅允许 storage/ 前缀，防止通过异常 file_path 读取项目内其他文件
+     * @param string $relativePath 附件表中的 file_path
+     * @return string 非法路径返回空串
+     */
+    public static function diskPath(string $relativePath): string
+    {
+        $relative = ltrim(str_replace('\\', '/', trim($relativePath)), '/');
+
+        if ($relative === '' || str_contains($relative, '..') || !str_starts_with($relative, 'storage/')) {
+            return '';
+        }
+
+        return root_path() . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+    }
+
     /** 表名 */
     protected $name = 'attachment';
 
@@ -116,9 +139,9 @@ class Attachment extends Model
 
         $paths = [];
         foreach ($list as $item) {
-            $path = public_path() . str_replace('/', DIRECTORY_SEPARATOR, (string) $item->file_path);
+            $path = self::diskPath((string) $item->file_path);
 
-            if (is_file($path)) {
+            if ($path !== '' && is_file($path)) {
                 $paths[] = $path;
             }
         }

@@ -60,7 +60,7 @@ class SupplierContact extends BaseController
 
             $keyword = trim((string) $this->request->param('keyword', ''));
             if ($keyword !== '') {
-                $like = '%' . $keyword . '%';
+                $like = '%' . like_escape($keyword) . '%';
                 $query->where(function ($q) use ($like) {
                     $q->whereLike('name', $like)
                         ->whereOr('phone', 'like', $like)

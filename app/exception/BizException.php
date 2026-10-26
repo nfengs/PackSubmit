@@ -19,11 +19,15 @@ class BizException extends Exception
 
     /**
      * @param string $message    提示文字
-     * @param int    $code       业务码：0 业务错误、401 未登录、403 权限不足
-     * @param int    $httpStatus HTTP 状态码
+     * @param int    $code       业务码：0 业务错误、401 未登录、403 权限不足、404 资源不存在、429 请求过频
+     * @param int    $httpStatus HTTP 状态码；传 0 时按业务码自动映射（401/403/404/429），其余为 200
      */
-    public function __construct(string $message = '操作失败', int $code = 0, int $httpStatus = 200)
+    public function __construct(string $message = '操作失败', int $code = 0, int $httpStatus = 0)
     {
+        if ($httpStatus === 0) {
+            $httpStatus = in_array($code, [401, 403, 404, 429], true) ? $code : 200;
+        }
+
         $this->httpStatus = $httpStatus;
         parent::__construct($message, $code);
     }

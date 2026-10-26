@@ -151,7 +151,11 @@ const passwordRules = {
   old_password: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
   new_password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, max: 32, message: '密码长度为 6~32 位', trigger: 'blur' },
+    {
+      pattern: /^(?=.*[A-Za-z])(?=.*\d)[^\s]{8,32}$/,
+      message: '密码需 8-32 位，且同时包含字母和数字',
+      trigger: 'blur',
+    },
   ],
   confirm_password: [
     { required: true, message: '请再次输入新密码', trigger: 'blur' },
@@ -251,8 +255,14 @@ async function handleChangePassword() {
   passwordSaving.value = true;
 
   try {
-    await changePassword({ ...passwordForm });
-    ElMessage.success('密码修改成功');
+    const data = await changePassword({ ...passwordForm });
+
+    // 改密后旧 token 已失效，保存后端补发的新 token 以保持当前会话
+    if (data?.token) {
+      userStore.applyToken(data.token);
+    }
+
+    ElMessage.success('密码修改成功，其他设备需重新登录');
     passwordVisible.value = false;
   } finally {
     passwordSaving.value = false;

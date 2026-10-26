@@ -16,6 +16,7 @@ use think\model\relation\HasMany;
  * @property string $dept
  * @property string $phone
  * @property int    $status
+ * @property int    $token_version
  */
 class User extends Model
 {
@@ -49,8 +50,9 @@ class User extends Model
 
     /** 类型转换 */
     protected $type = [
-        'role'   => 'integer',
-        'status' => 'integer',
+        'role'          => 'integer',
+        'status'        => 'integer',
+        'token_version' => 'integer',
     ];
 
     /** 输出追加字段 */

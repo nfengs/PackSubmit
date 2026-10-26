@@ -68,7 +68,7 @@ app/
 │   └── MasterLogService.php   # 主数据维护日志（pf_master_log）
 ├── model/                 # 11 张表的模型
 ├── validate/              # 参数验证器
-├── middleware/            # JwtAuth、RoleAuth
+├── middleware/            # Cors（全局）、JwtAuth、RoleAuth
 route/api.php              # 全部 API 路由
 database/                  # 数据库初始化脚本（pack_submit.sql）
 public/                    # 入口、附件、前端构建产物
@@ -83,7 +83,39 @@ Vue 页面 → axios（Bearer Token）→ JwtAuth → RoleAuth(admin) → Contro
         → 统一响应 { code, msg, data }
 ```
 
-响应约定：`code = 1` 成功；`code = 0` 业务错误；`401` 未登录 / 登录失效；`403` 权限不足。
+响应约定：`code = 1` 成功；`code = 0` 业务错误。HTTP 状态码与业务码自动对齐：`401` 未登录 / 登录失效、`403` 权限不足、`404` 资源不存在、`429` 请求过频（登录限流）均同时返回对应状态码；其余业务错误返回 HTTP 200 + `code = 0`。
+
+### 3.1 功能与代码对照
+
+| 功能模块 | 后端实现 | 前端页面 / 组件 | 主要数据表 |
+| --- | --- | --- | --- |
+| 登录 / 退出 / 改密 / 当前用户 | `controller/Auth.php`、`middleware/JwtAuth.php` | `views/Login.vue`、`store/user.js`、`utils/auth.js` | `pf_user`、`pf_review_log` |
+| 工作台统计 | `Proposal::statistics` | `views/Home.vue` | `pf_pack_proposal` |
+| 方案列表 / 详情 / 编辑 | `Proposal.php`、`ProposalService.php` | `views/proposal/List.vue`、`Form.vue`、`Detail.vue` | `pf_pack_proposal`、`pf_attachment`、`pf_review_log` |
+| 提交 / 撤回 / 评审 / 归档 | `ProposalService`（状态机）、`admin/Proposal.php` | `views/proposal/ReviewDialog.vue`、`admin/AllProposal.vue` | `pf_pack_proposal`、`pf_review_log` |
+| 发起变更 / 取消变更 | `ProposalService::change/copy/delete`、`copyAttachments` | `Detail.vue`、`List.vue` | `pf_pack_proposal`、`pf_attachment` |
+| 附件上传 / 预览 / 下载 / 删除 / 绑定 | `Attachment.php`、`model/Attachment.php` | `components/FileUpload.vue` | `pf_attachment` |
+| 包装确认单导出 | `service/PackExportService.php`（模板 + 图片锚点） | `Detail.vue` 导出按钮 | `pf_pack_proposal`、`pf_attachment` |
+| 全量详细方案 / 明细导出 | `admin/Proposal.php::detail` | `admin/ProposalReport.vue`（列设置 + 前端 xlsx 导出） | `pf_pack_proposal` |
+| 用户 / 字典 / 客户 / 供应商 / 零件号 | `controller/admin/*`、`MasterLogService.php` | `views/admin/UserList.vue`、`DictList.vue`、`CustomerList.vue`、`SupplierList.vue`、`PartList.vue` | `pf_user`、`pf_dict`、`pf_customer`、`pf_supplier`、`pf_supplier_part`、`pf_master_log`、`pf_part_log` |
+| 供应商联系人 | `SupplierContact.php` | `views/supplier/ContactList.vue` | `pf_supplier_contact` |
+| 审计日志 | `AuditService.php`、`admin/Log.php` | `views/admin/LogList.vue` | `pf_review_log` |
+| 主数据下拉 | `MasterData.php`、`Dict.php` | `api/masterData.js`、`api/dict.js` | 客户 / 供应商 / 零件号 / 字典 |
+
+### 3.2 运行期配置（`.env`）
+
+| 配置 | 说明 | 默认 / 建议 |
+| --- | --- | --- |
+| `APP_DEBUG` | 调试模式；开启时异常页会输出框架堆栈与服务器路径 | 生产必须为 `false` |
+| `JWT_SECRET` | JWT 签名密钥（≥32 字节随机串） | 必须逐环境独立 |
+| `JWT_TTL` | token 有效期（秒） | 7200（2 小时） |
+| `JWT_REFRESH_TTL` | 可刷新时间窗（分钟）：过期 token 在该窗口内仍可通过 `/api/auth/refresh` 换取新 token | 20160 |
+| `CORS_ALLOW_ORIGIN` | 允许跨域的来源白名单，多个用英文逗号分隔 | 默认空 = 不开放跨域（同域部署无需配置）；不要使用 `*` |
+| `LOGIN_MAX_ATTEMPTS` | 同一账号 + IP 允许的连续登录失败次数 | 5 |
+| `LOGIN_MAX_IP_ATTEMPTS` | 同一 IP 允许的连续登录失败次数 | 20 |
+| `LOGIN_LOCK_SECONDS` | 触发限流后的锁定时长（秒） | 900 |
+
+全局中间件：`app/middleware.php` 注册 `Cors`（白名单校验，预检返回 204）与 `SecurityHeaders`（移除 `X-Powered-By`，补充 `X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`/`Permissions-Policy`，JSON 接口追加 CSP）；`JwtAuth` / `RoleAuth` 在 `route/api.php` 的路由组上挂载。
 
 ---
 
@@ -110,19 +142,25 @@ Vue 页面 → axios（Bearer Token）→ JwtAuth → RoleAuth(admin) → Contro
 
 **登录**
 
-1. 校验账号、密码（bcrypt）。
-2. 校验账号状态，禁用账号直接拒绝。
-3. 签发 JWT（`uid`、`role`，默认 2 小时有效）。
-4. 写入登录审计日志，返回 token 与用户信息。
+1. 校验账号、密码（bcrypt）；账号不存在与密码错误返回同一提示，避免账号枚举。
+2. 登录失败限流：同一账号 + IP 连续失败 5 次、或同一 IP 连续失败 20 次后锁定 15 分钟（HTTP 429），成功登录清零账号计数。
+3. 校验账号状态，禁用账号直接拒绝。
+4. 签发 JWT（`uid`、`role`、`ver`，默认 2 小时有效）。
+5. 写入登录审计日志，返回 token 与用户信息。
 
 **鉴权**
 
-- 每个请求由 `JwtAuth` 校验 token，并**回查数据库**确认用户仍存在且启用——账号被禁用后，已登录会话立即失效。
+- 每个请求由 `JwtAuth` 校验 token，并**回查数据库**确认用户仍存在、启用且 `token_version` 与 token 内 `ver` 一致——账号被禁用或改密后，已登录会话立即失效。
 - 退出登录把 token 加入黑名单。
+
+**刷新 token**
+
+- `POST /api/auth/refresh`：在 `JWT_REFRESH_TTL` 窗口内（含已过期 token）换取新 token，旧 token 立即加入黑名单；前端 `request.js` 遇 401 会自动静默刷新并重放原请求，刷新失败才跳转登录页。
 
 **修改密码**
 
-- 校验原密码正确、新密码长度 6–32、新旧密码不能相同；成功后记录审计日志。
+- 校验原密码正确、新旧密码不能相同，并按统一密码策略校验（8–32 位且同时包含字母和数字，拒绝常见弱口令）。
+- 成功后 `token_version + 1`，该账号**所有旧 token 立即失效**；接口同时返回新 token 供当前设备继续使用。
 
 ### 5.2 工作台
 
@@ -164,6 +202,7 @@ Vue 页面 → axios（Bearer Token）→ JwtAuth → RoleAuth(admin) → Contro
 - 规格尺寸 = 包装箱外尺寸 `长*宽*高mm`。
 - 数量 = 存放数量（件/箱）。
 - 每托盘零件数量 = 每层包装箱数量 × 堆码层数 × 存放数量，禁止手工填写。
+- 以上三项（`spec` / `quantity` / `pallet_parts_qty`）**一律由后端 `deriveFields` 计算**，前端传入值会被忽略；编辑时以原方案数据为基准，仅修改存放数量时规格与托盘数也会同步重算。
 - 选择「不带托盘」时托盘相关字段全部清零。
 - 尺寸字段只允许整数（mm），带小数直接拒绝。
 - 填写日期固定为当天：前端锁定不可修改，后端保存时强制覆盖为当天（忽略前端传值）。
@@ -251,10 +290,12 @@ Vue 页面 → axios（Bearer Token）→ JwtAuth → RoleAuth(admin) → Contro
 **去重（MD5）**
 
 - 上传时计算文件内容 MD5，相同内容的文件**只保留一份物理文件**，新记录复用已有路径；接口返回 `reused` 标记，前端提示「已复用服务器上的相同文件」。
-- 删除附件时采用引用计数：仅当该物理文件不再被任何附件记录引用时才真正删除，避免误删被复用文件。
+- 去重按 MD5 查询候选记录，取**物理文件仍存在**的第一条路径复用；历史记录文件被清理时会自动跳过，不会重复落盘。
+- 删除附件时按 `file_path` 做引用计数：仅当该物理文件不再被任何附件记录引用时才真正删除，避免误删被复用文件，也不会因历史记录文件缺失而残留孤儿文件。
 
 **下载 / 预览**
 
+- 附件物理文件存放于项目根目录 `storage/attachments/`（Web 根目录之外），**不存在可绕过鉴权的直链**，只能通过下面两个接口读取。
 - 下载、预览都做权限校验：暂存附件仅上传人 / 管理员；已关联附件按方案查看权限。
 - 仅 pdf / png / jpg 支持浏览器内预览。
 - 物理文件不存在时返回 404 提示。
@@ -262,6 +303,7 @@ Vue 页面 → axios（Bearer Token）→ JwtAuth → RoleAuth(admin) → Contro
 **删除**
 
 - 仅上传人 / 管理员；关联方案时仅草稿可删；删除记录并写审计日志，物理文件按引用计数决定是否删除。
+- 删除**不要求物理文件存在**：服务器文件被清理后仍可删除附件记录，从而重新上传（失效图片在编辑页显示为「图片文件已丢失，请删除后重新上传」）。
 
 ### 5.13 导出包装确认单
 
@@ -273,11 +315,11 @@ Vue 页面 → axios（Bearer Token）→ JwtAuth → RoleAuth(admin) → Contro
 ### 5.14 用户管理（管理员）
 
 - 列表：关键词（账号 / 姓名 / 部门）、角色、状态筛选。
-- 新增：账号唯一（字母 / 数字 / 下划线，≤ 50）；密码 6–32；角色必选；供应商必须选择供应商，且供应商必须存在于供应商档案。
+- 新增：账号唯一（字母 / 数字 / 下划线，≤ 50）；初始密码需满足统一密码策略（8–32 位且同时包含字母和数字）；角色必选；供应商必须选择供应商，且供应商必须存在于供应商档案。
 - 编辑：不能修改自己的角色和启用状态。
 - 启用 / 禁用：不能禁用当前登录账号；禁用后该账号的已登录会话在下一次请求即失效。
 - 重置密码：管理员直接设置新密码。
-- 批量导入：Excel 列顺序「登录账号、姓名、角色、部门/供应商、联系电话、初始密码」；角色填 1/2/3/4 或中文（含「查看者」）；账号已存在则更新（可选重置密码），不存在则新增（必填初始密码）；提供模板下载。
+- 批量导入：Excel 列顺序「登录账号、姓名、角色、部门/供应商、联系电话、初始密码」；角色填 1/2/3/4 或中文（含「查看者」）；账号已存在则更新（可选重置密码），不存在则新增（必填初始密码）；初始密码同样按密码策略校验，不合规的行会返回行号错误；提供模板下载。
 - 维护日志：首次录入、修改（字段前后值）、启停、重置密码；密码值不写日志。
 - 日志按钮位于「更新时间」旁边。
 
@@ -302,7 +344,6 @@ Vue 页面 → axios（Bearer Token）→ JwtAuth → RoleAuth(admin) → Contro
 - 删除保护：已被方案使用、或仍有账号在用，均不能删除。
 - 批量导入：Excel 列顺序「供应商名称、供应商代码、供应商地址」；名称已存在则更新代码与地址，不存在则新增；提供模板下载。
 - 维护日志：首次录入、修改（字段前后值）；日志按钮在「更新时间」旁。
-- 维护日志：首次录入、修改前后值；日志按钮在「更新时间」旁。
 
 ### 5.18 零件号维护（管理员，核心模块）
 
@@ -446,7 +487,9 @@ stateDiagram-v2
 
 ### 8.1 身份与权限
 
-- 所有业务接口默认要求登录；JWT 每次请求回查用户存在且启用。
+- 所有业务接口默认要求登录；JWT 每次请求回查用户存在、启用，并比对 `token_version`（改密 / 重置密码后旧 token 立即失效）。
+- 登录失败按「账号 + IP」「IP」双维度限流（默认 5 次 / 20 次，锁定 15 分钟，HTTP 429），错误提示统一为「账号或密码错误」。
+- 密码统一策略：8–32 位且同时包含字母和数字，拒绝常见弱口令；自助改密、管理员新建 / 重置、Excel 导入共用同一校验。
 - 管理员接口组强制 `role=3`；评审接口校验评审员 / 管理员。
 - 供应商可看 / 编辑本供应商全部方案（供应商内互通）；评审员不能看他人草稿；查看者可看全部但只读；管理员全量。
 - 供应商联系人：供应商只能读写本供应商，管理员可代维护任意供应商，评审员 / 查看者访问即 403。
@@ -560,6 +603,7 @@ stateDiagram-v2
 | `dept` | varchar(100) | 部门；供应商保存所属供应商名称，供应商改名时同步更新 |
 | `phone` | varchar(30) | 联系电话 |
 | `status` | tinyint unsigned | `1` 启用、`0` 禁用；禁用后 JWT 请求立即被拒 |
+| `token_version` | int unsigned | token 版本号（默认 1）；改密 / 重置密码时 +1，旧 token 全部失效 |
 | `create_time` | datetime | 创建时间 |
 | `update_time` | datetime | 最后更新时间 |
 
@@ -663,7 +707,7 @@ stateDiagram-v2
 | `attach_type` | varchar(20) | 附件类型：`part` 零件图片、`inner` 内部排列、`final` 整体包装、`packaging` 包装图片、`attachment` 普通附件 |
 | `user_id` | int unsigned | 上传人 ID，决定暂存附件与删除权限 |
 | `file_name` | varchar(255) | 原始文件名，下载时还原 |
-| `file_path` | varchar(500) | 相对存储路径（`/storage/attachments/YYYYMM/...`），同内容文件复用同路径 |
+| `file_path` | varchar(500) | 相对项目根目录的存储路径（`storage/attachments/YYYYMM/...`），物理目录在 Web 根目录之外；同内容文件复用同路径 |
 | `file_ext` | varchar(20) | 扩展名（图片以真实内容识别后规范化） |
 | `file_size` | int unsigned | 文件字节数，列表展示为可读大小 |
 | `mime_type` | varchar(100) | MIME 类型 |
@@ -811,8 +855,9 @@ stateDiagram-v2
 
 文件存储：
 
-- 附件：`public/storage/attachments/YYYYMM/`（文件名时间戳 + 随机串）。
+- 附件：`storage/attachments/YYYYMM/`（**项目根目录，位于 Web 根目录 `public/` 之外**；文件名时间戳 + 随机串，只能经 `/api/attachments/{id}/preview|download` 鉴权访问）。
 - 导出临时文件：`runtime/export/`；PDF 字体缓存：`runtime/dompdf/`。
+- 数据库 `pf_attachment.file_path` 存相对项目根目录的路径（`storage/attachments/...`），物理路径统一由 `Attachment::diskPath()` 解析，并限制必须以 `storage/` 开头、禁止 `..`。
 
 ---
 
@@ -822,7 +867,8 @@ stateDiagram-v2
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/auth/login` | 登录 |
+| POST | `/auth/login` | 登录（失败限流，超出返回 429） |
+| POST | `/auth/refresh` | 刷新 token（旧 token 拉黑，支持刷新窗口内的过期 token） |
 
 **登录后**
 
@@ -902,7 +948,19 @@ mysql -uroot -p -e "CREATE DATABASE pack_submit DEFAULT CHARSET utf8mb4;"
 mysql -uroot -p pack_submit < database/pack_submit.sql
 ```
 
-`database/pack_submit.sql` 为完整的初始化脚本（含建表与演示数据），新建库直接导入即可。
+`database/pack_submit.sql` 为完整的初始化脚本（11 张表 + 演示数据），**只作用于命令中指定的数据库**，不再内置 `CREATE DATABASE` / `USE`。
+
+> ⚠️ 脚本每张表前都有 `DROP TABLE IF EXISTS`，会清空目标库中的 `pf_*` 表。仅对确认可清空的开发库执行；生产环境请先备份，或只执行需要的 `CREATE TABLE` 片段。
+
+> 从旧版本升级（`pf_user` 缺少 `token_version` 字段）时执行：
+>
+> ```sql
+> ALTER TABLE pf_user
+>   ADD COLUMN token_version int unsigned NOT NULL DEFAULT 1
+>   COMMENT 'token 版本号（改密后递增，吊销旧 token）' AFTER status;
+> ```
+>
+> 升级后所有用户需重新登录一次（旧 token 不含 `ver`，会被判定为失效）。
 
 启动：
 
@@ -921,8 +979,19 @@ npm run deploy         # 生产构建：清空 public/assets 并复制 dist 到 
 
 Web 服务器根目录必须是 `public/`，并保证以下目录可写：
 
-- `public/storage/attachments/`
+- `storage/attachments/`（项目根目录，**不要**放回 `public/` 下，否则附件可被直链下载）
 - `runtime/`
+
+> 从旧版本升级（附件原在 `public/storage/attachments/`）时执行一次迁移：
+>
+> ```bash
+> mkdir -p storage
+> mv public/storage/attachments storage/
+> rm -rf public/storage
+> chmod -R 755 storage
+> ```
+>
+> 数据库中的 `file_path` 仍为 `storage/attachments/...`，无需改数据；迁移后旧直链立即失效。
 
 ### 演示账号
 
@@ -950,3 +1019,62 @@ Web 服务器根目录必须是 `public/`，并保证以下目录可写：
 - 每类图片位置只允许 1 张；导出时每处只嵌入 1 张（取最早上传的一张，不兼容历史多图数据）。
 - 前端构建产物直接放在 `public/`，仓库中的 `public/assets` 为最新构建结果。
 - 全局审计日志与业务维护日志分离：前者用于合规审计，后者用于维护页面按行查询。
+- **附件物理文件位于项目根目录 `storage/attachments/`**（Web 根目录之外），只能通过带鉴权的接口访问；旧版本部署升级时需按「十一、本地运行与部署」执行目录迁移，否则附件会读取失败。
+- **CORS 默认不开放**：`CORS_ALLOW_ORIGIN` 为空时不下发跨域头；需要跨域时配置白名单（不支持 `*`）。
+- **登录失败限流**：同账号 + IP 5 次、同 IP 20 次后锁定 15 分钟（可配置）；密码策略为 8–32 位且同时包含字母和数字，并拒绝常见弱口令。
+- **改密 / 管理员重置密码 / 导入重置密码会递增 `token_version`**，该用户全部旧 token 立即失效；当前设备改密后会拿到新 token，其他设备需重新登录。
+- **token 支持滑动续期**：`/api/auth/refresh` 在 `JWT_REFRESH_TTL` 内可用（含已过期 token），前端自动静默刷新；刷新失败的请求才跳转登录页。
+- **附件上传 / 暂存无数量与容量配额**，如需防止磁盘占满建议在反向代理层或应用层补充限制。
+- **业务规则类提示仍返回 HTTP 200 + `code = 0`**（如「方案已提交，不能删除附件」「编辑需提交完整表单」），权限 / 未登录 / 资源不存在 / 限流分别返回 403 / 401 / 404 / 429。
+- 附件 MD5 去重会跳过物理文件已丢失的历史记录；引用计数按 `file_path` 统计，删除最后一条引用时清理物理文件。
+- 二进制响应（图片 / PDF 预览）的 `Content-Type` 仍附带 `; charset=utf-8`，对浏览器渲染无影响。
+
+---
+
+## 十三、本轮测试与问题清单（2026-10-26）
+
+### 13.1 测试环境与方法
+
+| 项 | 内容 |
+| --- | --- |
+| 运行方式 | `php think run --host 127.0.0.1 --port 8010`（PHP 8.2.35 + MySQL 8.4 + `APP_DEBUG=true`） |
+| 测试方式 | 直接对 `/api` 发起 HTTP 请求（curl），覆盖 4 类角色 + 2 个供应商租户 |
+| 测试账号 | 管理员 `admin`、评审员 / 查看者 / 供应商账号由管理员接口临时创建，测试后清理 |
+| 测试图片 | `public/static/20250601155016-INN0210001-683c0638d73ba.jpg`（png/jpg 内容校验、去重、导出均使用该图） |
+| 数据清理 | 测试方案 / 附件 / 用户 / 零件号 / 联系人已删除。执行过程中因误用初始化脚本导致开发库被重建，已用备份 `pack_submit-2.sql` 恢复并校验（22 条方案 / 6 条附件 / 3 个账号），见问题 2 |
+
+覆盖范围：认证与登录（含爆破）、权限矩阵与越权（跨供应商 / 评审员看草稿 / 查看者写操作 / 管理员接口）、方案字段派生与校验、完整状态机（草稿→提交→撤回→驳回→版本 +1→通过→归档→变更→作废）、附件（上传 / 去重 / 引用计数 / 预览 / 下载 / 删除 / 暂存绑定 / 物理文件缺失）、异常文件上传、Excel 导出、零件号导入与批量修改、用户 / 字典 / 客户 / 供应商 / 联系人维护、审计日志、CORS、JWT 伪造 / 过期、SQL 注入、静态资源暴露。
+
+### 13.2 结果统计
+
+- 共执行 308 项检查：**255 项通过**、21 项失败、32 项观察记录。21 项失败经逐条复核，7 项为脚本 / 用例写法问题（复核后通过），其余归入下表 **14 类有效问题**（含提示级）。
+- 核心业务链路（方案全流程、四类图片、导出、变更作废、导入同步、权限矩阵）**全部通过**。
+- **修复后复测（2026-10-26）**：新增 90 项针对性回归（安全头 / CORS 11 项、错误页 5 项、刷新与限流 7 项、密码策略 15 项、字段派生 12 项、LIKE 与去重 11 项、全流程与导出 23 项、初始化脚本导入 1 项）**全部通过**；`database/pack_submit.sql` 在独立库导入验证为 11 张表且不影响主库。
+
+### 13.3 问题清单与修改建议
+
+| # | 级别 | 问题 | 复现 / 证据 | 建议 |
+| --- | --- | --- | --- | --- |
+| 1 | 高 | 附件物理文件位于 `public/storage/attachments/`，脱离接口鉴权可直接下载；PHP 内置服务器下目录列表返回 200 | `GET /storage/attachments/202610/xxx.jpg` → 200（未登录） | ✅ 已修复：存储目录迁至项目根 `storage/attachments/`（Web 根外），路径统一由 `Attachment::diskPath()` 解析（限定 `storage/` 前缀、拒绝 `..`）；`public/storage` 已移除，旧直链失效，附件仅能经鉴权接口访问 |
+| 2 | 高 | `database/pack_submit.sql` 硬编码 `CREATE DATABASE pack_submit` + `USE pack_submit` 且逐表 `DROP TABLE IF EXISTS`，导入到任意库都会清空重建 `pack_submit` | 向临时库导入该脚本后，`pack_submit` 被重建为演示数据 | ✅ 已修复：移除 `CREATE DATABASE` / `USE`，脚本只作用于执行命令指定的库；同时补齐原脚本缺失的 `pf_master_log`、`pf_part_log`（现为 11 张表）；README 增加用法与备份提示 |
+| 3 | 中 | 全局 CORS 下发 `Access-Control-Allow-Origin: *`，任意站点可携带用户 token 调用接口（token 存于 localStorage） | 预检 `Origin: https://evil.example` → `ACAO: *`，204 | ✅ 已修复：`Cors` 改为 `CORS_ALLOW_ORIGIN` 白名单（逗号分隔），非白名单不下发 CORS 头；默认关闭跨域并返回 `Vary: Origin` |
+| 4 | 中 | 登录无失败次数限制 / 账号锁定 / 限流 | 连续 12 次错误密码后仍可正常登录，无 429 | ✅ 已修复：账号 + IP 5 次、IP 20 次失败后锁定 15 分钟并返回 429；成功登录清零账号计数（`LOGIN_*` 可配置） |
+| 5 | 中 | 弱口令可登录、可重置 | `admin/admin123` 可用；管理员可将密码重置为 `123456` | ✅ 已修复：新增 `PasswordPolicy`（8–32 位且同时含字母和数字、弱口令黑名单），自助改密 / 新建用户 / 重置密码 / Excel 导入统一校验，前端同步规则 |
+| 6 | 中 | `APP_DEBUG=true` 时非 API 路径 404 渲染框架调试页，泄露服务器绝对路径与依赖文件列表 | `GET /.env` → 29 KB HTML，含 `/Users/.../vendor/...` 路径 | ✅ 已修复：非 API 异常返回简洁错误页；`config/trace.php` 指定空 trace 实现，调试模式下也不再注入调试面板；`.example.env` 默认 `APP_DEBUG=false` |
+| 7 | 低 | 管理员新增方案接口未强制 `supplier`，缺失时跳过「供应商 + 零件号」唯一性校验，产生 `supplier` 为空的孤儿方案 | `POST /proposals`（不带 supplier）→ 创建成功，方案无法被供应商看到 | ✅ 已修复：`ProposalService::create` 强制要求供应商与零件号，缺失直接拒绝 |
+| 8 | 低 | 编辑接口信任前端传入的 `spec` / `quantity`，与「自动派生」规则不一致 | 传 `quantity=999`、`spec=HACK*1*1mm` 被原样保存 | ✅ 已修复：`deriveFields` 丢弃前端传入的 `spec` / `quantity` / `pallet_parts_qty`，编辑时以原方案数据为基准重算 |
+| 9 | 低 | 附件 MD5 去重仅检查最早一条同 MD5 记录，该文件被清理后去重退化，同内容重复落盘 | 最早记录文件缺失时连续上传 4 次生成 4 个物理文件 | ✅ 已修复：去重时遍历 MD5 候选并挑选物理文件存在者复用；删除改为按 `file_path` 引用计数，不再残留孤儿文件 |
+| 10 | 低 | 修改密码不吊销已签发 token | 改密后旧 token 仍可访问接口 | ✅ 已修复：`pf_user.token_version` + JWT `ver` 声明；改密 / 管理员重置 / 导入重置均递增版本号，旧 token 立即 401；当前设备返回新 token |
+| 11 | 低 | 缺少安全响应头，且暴露 `X-Powered-By: PHP/8.2.35` | 响应头无 `X-Content-Type-Options` / `X-Frame-Options` / CSP / `Referrer-Policy` | ✅ 已修复：新增 `SecurityHeaders` 中间件（移除 `X-Powered-By`，补充 nosniff / SAMEORIGIN / Referrer-Policy / Permissions-Policy，JSON 接口追加 CSP，HTTPS 追加 HSTS） |
+| 12 | 低 | 关键词搜索未转义 LIKE 通配符，`%` 可匹配全部数据；业务错误统一 HTTP 200 | `keyword=%` 返回全部；权限类错误部分返回 200 + `code=0` | ✅ 已修复：新增 `like_escape()` 并应用于方案 / 用户 / 客户 / 供应商 / 零件号 / 字典 / 联系人 / 日志搜索；`BizException` 对 401/403/404/429 自动映射 HTTP 状态码 |
+| 13 | 提示 | 附件上传 / 暂存无数量与容量配额，可无限占用磁盘；`preview` 的 Content-Type 附带 `charset` | 暂存上传无限制；图片预览返回 `image/jpeg; charset=utf-8` | 待处理：增加单用户暂存数量 / 总量限制；精确设置二进制响应 Content-Type |
+| 14 | 提示 | `JWT_REFRESH_TTL` 有配置但无刷新接口，2 小时后必须重新登录 | 无 `/auth/refresh` 路由 | ✅ 已修复：新增 `POST /api/auth/refresh`（刷新窗口内过期 token 也可续期，旧 token 拉黑）；前端 401 自动静默刷新并重放请求 |
+
+### 13.4 已确认防护有效的部分
+
+- 供应商内互通、跨供应商隔离（列表范围、详情、编辑、附件、导出、联系人）均按预期返回 403。
+- 评审员看不到他人草稿；查看者全部写操作被后端拒绝（403），只读页面的 `permissions` 全为 false。
+- 附件：扩展名白名单、10MB 限制、图片内容识别（伪装 jpg 的 PHP / SVG / GIF 均被拒）、每类图片 1 张、暂存附件仅本人可见、路径穿越文件名被随机改名。
+- 方案状态机：撤回清空提交时间、已评审不可撤回、驳回重提版本 +1、变更仅限已归档、重复变更拦截、变更归档后原方案置为作废。
+- SQL 注入（列表关键词、登录、数值参数）未生效；JWT 签名篡改 / `alg=none` / 过期 token 均被拒；伪造 `role=3` 无法提权（按数据库角色鉴权）。
+- 禁用账号后旧 token 下一次请求立即失效；导出 / 查看 / 状态流转均写入审计日志。

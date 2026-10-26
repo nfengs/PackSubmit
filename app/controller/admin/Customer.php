@@ -33,7 +33,7 @@ class Customer extends BaseController
         $keyword = trim((string) $this->request->param('keyword', ''));
         if ($keyword !== '') {
             $query->where(function ($q) use ($keyword) {
-                $like = '%' . $keyword . '%';
+                $like = '%' . like_escape($keyword) . '%';
                 $q->whereLike('name', $like)
                     ->whereOr('contact', 'like', $like)
                     ->whereOr('phone', 'like', $like);
