@@ -1,1 +1,0 @@
-import{Y as t}from"./index-BHhQfg8J.js";function a(){return t.get("/master-data/customers")}function s(){return t.get("/master-data/suppliers")}function u(){return t.get("/master-data/my-supplier")}function p(e=""){return t.get("/master-data/parts",{params:{supplier:e}})}export{p as a,s as b,u as c,a as g};

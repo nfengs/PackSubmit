@@ -1,1 +1,0 @@
-import{Y as e}from"./index-BHhQfg8J.js";function n(t){return e.get("/supplier-contacts",{params:t})}function c(t){return e.post("/supplier-contacts",t)}function u(t,p){return e.put(`/supplier-contacts/${t}`,p)}function o(t){return e.delete(`/supplier-contacts/${t}`)}export{c,o as d,n as g,u};
