@@ -8,6 +8,7 @@ use app\exception\BizException;
 use app\model\PackProposal;
 use app\model\ReviewLog;
 use app\model\User;
+use app\service\AuditService;
 use app\service\PackExportService;
 use app\service\ProposalService;
 use app\validate\ProposalValidate;
@@ -102,10 +103,15 @@ class Proposal extends BaseController
 
         ProposalService::assertViewable($proposal, $user);
 
-        // 附件上传/删除只做操作留痕，不进入评审日志展示
+        AuditService::record((int) $user->id, 'view', (int) $proposal->id, [
+            'version' => (int) $proposal->version,
+            'content' => '查看方案：' . (trim((string) $proposal->part_name) !== '' ? $proposal->part_name : $proposal->proposal_no),
+        ]);
+
+        // 附件上传/删除、查看/导出只做操作留痕，不进入评审日志展示
         $logs = ReviewLog::with(['operator'])
             ->where('proposal_id', $id)
-            ->whereNotIn('action', ['upload', 'delete_attachment'])
+            ->whereNotIn('action', ['upload', 'delete_attachment', 'view', 'export'])
             ->order('id', 'desc')
             ->select();
 
@@ -376,7 +382,14 @@ class Proposal extends BaseController
             throw new BizException('方案不存在或已被删除', 0, 404);
         }
 
-        ProposalService::assertViewable($proposal, $this->currentUser());
+        $user = $this->currentUser();
+        ProposalService::assertViewable($proposal, $user);
+
+        AuditService::record((int) $user->id, 'export', (int) $proposal->id, [
+            'version' => (int) $proposal->version,
+            'content' => '导出方案（' . strtoupper($format) . '）：'
+                . (trim((string) $proposal->part_name) !== '' ? $proposal->part_name : $proposal->proposal_no),
+        ]);
 
         try {
             $path = $format === 'pdf'

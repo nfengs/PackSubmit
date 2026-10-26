@@ -79,6 +79,8 @@ export const ACTION_TEXT = {
   change: '发起变更',
   obsolete: '变更作废原方案',
   delete: '删除方案',
+  view: '查看方案',
+  export: '导出方案',
   upload: '上传附件',
   delete_attachment: '删除附件',
   login: '登录系统',
