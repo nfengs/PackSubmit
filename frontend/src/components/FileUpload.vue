@@ -1,39 +1,48 @@
 <template>
   <div class="file-upload">
-    <!-- 图片模式：只展示图片，不显示文件名/大小 -->
-    <div v-if="isImage" class="image-grid">
-      <div v-for="file in files" :key="file.id" class="image-item" :style="boxStyle">
-        <img
-          v-if="thumbs[file.id]"
-          :src="thumbs[file.id]"
-          class="image-thumb"
-          alt="图片"
-          @click="openImage(file)"
-        />
-        <div v-else class="image-thumb image-thumb--loading" />
-        <div v-if="!disabled" class="image-action" title="删除" @click.stop="handleDelete(file)">
-          <el-icon><Delete /></el-icon>
-        </div>
+    <!-- 图片模式：上部方框（点击上传 / 预览），下部粘贴输入框 -->
+    <div v-if="isImage" class="image-uploader">
+      <div class="image-box" :style="boxStyle">
+        <template v-if="files.length">
+          <img
+            v-if="thumbs[files[0].id]"
+            :src="thumbs[files[0].id]"
+            class="image-thumb"
+            alt="图片"
+            @click="openImage(files[0])"
+          />
+          <div v-else class="image-thumb image-thumb--loading" />
+          <div v-if="!disabled" class="image-action" title="删除" @click.stop="handleDelete(files[0])">
+            <el-icon><Delete /></el-icon>
+          </div>
+        </template>
+
+        <el-upload
+          v-else-if="!disabled"
+          class="image-upload-el"
+          :show-file-list="false"
+          :multiple="false"
+          :disabled="uploading"
+          :http-request="handleUpload"
+          :before-upload="beforeUpload"
+          :accept="acceptExt"
+          :title="uploadTip"
+        >
+          <div class="upload-box" v-loading="uploading">
+            <el-icon class="upload-icon"><Plus /></el-icon>
+          </div>
+        </el-upload>
+
+        <div v-else class="image-empty">未上传</div>
       </div>
 
-      <div v-if="disabled && !files.length" class="image-empty" :style="boxStyle">未上传</div>
-
-      <el-upload
+      <el-input
         v-if="!disabled && !reachedMax"
-        class="image-uploader"
-        :style="boxStyle"
-        :show-file-list="false"
-        :multiple="false"
-        :disabled="uploading"
-        :http-request="handleUpload"
-        :before-upload="beforeUpload"
-        :accept="acceptExt"
-        :title="uploadTip"
-      >
-        <div class="upload-box" v-loading="uploading">
-          <el-icon class="upload-icon"><Plus /></el-icon>
-        </div>
-      </el-upload>
+        class="paste-input"
+        placeholder="将图片粘贴到此处上传"
+        @beforeinput="blockTyping"
+        @paste="handlePaste"
+      />
     </div>
 
     <!-- 普通附件模式：表格 -->
@@ -135,7 +144,7 @@ const props = defineProps({
   /** 图片卡片边长（px） */
   size: {
     type: Number,
-    default: 96,
+    default: 256,
   },
   /** 最多可上传数量，0 表示不限制（图片类默认 1 张） */
   maxCount: {
@@ -305,12 +314,14 @@ async function beforeUpload(file) {
 }
 
 /**
- * 自定义上传
- * @param {object} options
+ * 统一上传（选择文件与粘贴截图共用）
+ * @param {File} file
+ * @param {(percent:number)=>void} [onProgress]
+ * @returns {Promise<object|null>} 成功返回附件数据，超出数量限制返回 null
  */
-async function handleUpload(options) {
+async function doUpload(file, onProgress) {
   const formData = new FormData();
-  formData.append('file', options.file);
+  formData.append('file', file);
   formData.append('attach_type', props.attachType);
 
   if (Number(props.proposalId) > 0) {
@@ -322,7 +333,7 @@ async function handleUpload(options) {
   try {
     const data = await uploadAttachment(formData, (event) => {
       const percent = event.total ? Math.round((event.loaded / event.total) * 100) : 0;
-      options.onProgress({ percent });
+      onProgress?.(percent);
     });
 
     // 并发上传等异常情况下超出数量上限，回滚刚上传的文件
@@ -331,19 +342,134 @@ async function handleUpload(options) {
       ElMessage.warning(
         maxFiles.value === 1 ? '每个位置只能上传 1 张图片' : `最多只能上传 ${maxFiles.value} 个文件`,
       );
-      options.onError(new Error('超出上传数量限制'));
 
-      return;
+      return null;
     }
 
     updateFiles([...files.value, data]);
     await loadThumbs([data]);
     ElMessage.success(data.reused ? '上传成功（已复用服务器上的相同文件）' : '上传成功');
-    options.onSuccess(data);
-  } catch (error) {
-    options.onError(error);
+
+    return data;
   } finally {
     uploading.value = false;
+  }
+}
+
+/**
+ * 自定义上传（el-upload 选择文件入口）
+ * @param {object} options
+ */
+async function handleUpload(options) {
+  try {
+    const data = await doUpload(options.file, (percent) => options.onProgress({ percent }));
+
+    if (data) {
+      options.onSuccess(data);
+    } else {
+      options.onError(new Error('超出上传数量限制'));
+    }
+  } catch (error) {
+    options.onError(error);
+  }
+}
+
+/**
+ * 阻止在粘贴输入框中键入任何内容（保留光标与粘贴事件）
+ * @param {InputEvent} event
+ */
+function blockTyping(event) {
+  event.preventDefault();
+}
+
+/**
+ * 从剪贴板提取图片文件
+ * 兼容两种来源：直接复制的图片文件、截图软件截取的位图
+ * @param {DataTransfer} clipboard
+ * @returns {File|null}
+ */
+function extractImageFile(clipboard) {
+  // 情况 1：直接复制的图片文件（从文件管理器复制）
+  for (const file of clipboard.files || []) {
+    if ((file.type || '').startsWith('image/')) {
+      return file;
+    }
+  }
+
+  // 情况 2：截图软件截图（剪贴板为位图）
+  for (const item of clipboard.items || []) {
+    if (item.kind === 'file' && (item.type || '').startsWith('image/')) {
+      const file = item.getAsFile();
+
+      if (file) {
+        return file;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 规范化粘贴得到的图片文件（截图可能无扩展名，或扩展名与内容不符）
+ * @param {File} file
+ * @returns {File|null}
+ */
+function normalizePastedImage(file) {
+  const type = (file.type || '').toLowerCase();
+  const extMap = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg' };
+  const ext = extMap[type];
+
+  if (!ext) {
+    ElMessage.error('截图格式不支持，请使用 png / jpg 图片');
+
+    return null;
+  }
+
+  const currentExt = (file.name.split('.').pop() || '').toLowerCase();
+
+  if (IMAGE_EXT_LIST.includes(currentExt)) {
+    return file;
+  }
+
+  return new File([file], `screenshot-${Date.now()}.${ext}`, { type });
+}
+
+/**
+ * 粘贴上传（仅图片模式，每个位置仍限 1 张）
+ * 支持直接复制的图片文件与截图软件截图
+ * @param {ClipboardEvent} event
+ */
+async function handlePaste(event) {
+  if (!isImage.value || props.disabled || uploading.value) return;
+
+  const clipboard = event.clipboardData;
+
+  if (!clipboard) return;
+
+  const file = extractImageFile(clipboard);
+
+  // 剪贴板不是图片时保持默认粘贴行为
+  if (!file) return;
+
+  event.preventDefault();
+
+  if (reachedMax.value) {
+    ElMessage.warning('每个位置只能上传 1 张图片，请先删除已有图片');
+
+    return;
+  }
+
+  const pasted = normalizePastedImage(file);
+
+  if (!pasted) return;
+
+  if (!(await beforeUpload(pasted))) return;
+
+  try {
+    await doUpload(pasted);
+  } catch (error) {
+    ElMessage.error(error?.message || '图片上传失败');
   }
 }
 
@@ -462,13 +588,14 @@ async function handleDelete(row) {
 }
 
 /* ---------- 图片卡片 ---------- */
-.image-grid {
+.image-uploader {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.image-item {
+.image-box {
   position: relative;
   border: 1px solid #dcdfe6;
   border-radius: 6px;
@@ -480,11 +607,11 @@ async function handleDelete(row) {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: 100%;
   font-size: 12px;
   color: #c0c4cc;
   background: #fafafa;
-  border: 1px dashed #dcdfe6;
-  border-radius: 6px;
 }
 
 .image-thumb {
@@ -527,11 +654,17 @@ async function handleDelete(row) {
   transition: opacity 0.2s;
 }
 
-.image-item:hover .image-action {
+.image-box:hover .image-action {
   opacity: 1;
 }
 
-.image-uploader :deep(.el-upload) {
+.image-upload-el {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.image-upload-el :deep(.el-upload) {
   display: block;
   width: 100%;
   height: 100%;
@@ -558,6 +691,17 @@ async function handleDelete(row) {
 
 .upload-icon {
   font-size: 26px;
+}
+
+.paste-input {
+  width: 256px;
+  max-width: 100%;
+}
+
+.paste-input :deep(.el-input__inner) {
+  font-size: 12px;
+  text-align: center;
+  cursor: text;
 }
 
 /* ---------- 预览 ---------- */
