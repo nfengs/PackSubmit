@@ -1,0 +1,33 @@
+# 入口页优先 index.html（前端产物），避免误走 index.php 并注入调试信息
+DirectoryIndex index.html index.php
+
+# 让 PHP(FastCGI) 能读到 Authorization 头，JWT 鉴权依赖它
+CGIPassAuth On
+
+<IfModule mod_rewrite.c>
+  Options +FollowSymlinks -Multiviews
+  RewriteEngine On
+
+  # 接口请求交给 ThinkPHP（PATH_INFO 由 REQUEST_URI 解析，避免 PT 二次改写）
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^api/ index.php [L,QSA]
+
+  # 前端路由（Vue history 模式）回退到 index.html
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  # 入口页不缓存，避免发版后浏览器仍加载已删除的旧 hash 资源
+  <FilesMatch "index\.html$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+  </FilesMatch>
+
+  # 带 hash 的静态资源可长期缓存
+  <FilesMatch "\.(js|css|png|jpg|jpeg|svg|woff2?)$">
+    Header set Cache-Control "public, max-age=31536000"
+  </FilesMatch>
+</IfModule>
