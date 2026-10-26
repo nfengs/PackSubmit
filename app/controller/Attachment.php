@@ -224,7 +224,8 @@ class Attachment extends BaseController
      */
     public function delete(int $id): Json
     {
-        $attachment = $this->findAttachment($id);
+        // 物理文件可能已被清理，删除记录本身不受影响
+        $attachment = $this->findAttachment($id, false);
         $user       = $this->currentUser();
 
         if ((int) $user->role !== User::ROLE_ADMIN && (int) $attachment->user_id !== (int) $user->id) {
@@ -373,11 +374,12 @@ class Attachment extends BaseController
 
     /**
      * 查询附件并校验查看权限
-     * @param int $id
+     * @param int  $id
+     * @param bool $ensureExists 是否要求物理文件存在（删除时物理文件可能已被清理）
      * @return AttachmentModel
      * @throws BizException
      */
-    protected function findAttachment(int $id): AttachmentModel
+    protected function findAttachment(int $id, bool $ensureExists = true): AttachmentModel
     {
         $attachment = AttachmentModel::find($id);
 
@@ -393,7 +395,7 @@ class Attachment extends BaseController
                 throw new BizException('无权访问该附件', 403, 403);
             }
 
-            return $this->ensureFileExists($attachment);
+            return $ensureExists ? $this->ensureFileExists($attachment) : $attachment;
         }
 
         $proposal = $attachment->proposal;
@@ -404,7 +406,7 @@ class Attachment extends BaseController
 
         ProposalService::assertViewable($proposal, $this->currentUser());
 
-        return $this->ensureFileExists($attachment);
+        return $ensureExists ? $this->ensureFileExists($attachment) : $attachment;
     }
 
     /**

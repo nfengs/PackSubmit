@@ -36,7 +36,7 @@
       <div class="image-groups">
         <div v-for="group in imageGroups" :key="group.type" class="image-group">
           <p class="group-title">{{ group.label }}（{{ group.list.length }}）</p>
-          <FileUpload :model-value="group.list" :attach-type="group.type" :size="110" disabled />
+          <FileUpload :model-value="group.list" :attach-type="group.type" disabled />
         </div>
       </div>
 

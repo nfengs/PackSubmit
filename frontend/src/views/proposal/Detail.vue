@@ -174,7 +174,7 @@
         <el-col v-for="group in imageGroups" :key="group.type" :xs="24" :md="12">
           <div class="image-block">
             <p class="image-block-title">{{ group.label }}（{{ group.list.length }}）</p>
-            <FileUpload :model-value="group.list" :attach-type="group.type" :size="150" disabled />
+            <FileUpload :model-value="group.list" :attach-type="group.type" disabled />
           </div>
         </el-col>
       </el-row>

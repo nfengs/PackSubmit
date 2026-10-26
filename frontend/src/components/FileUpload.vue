@@ -11,6 +11,9 @@
             alt="图片"
             @click="openImage(files[0])"
           />
+          <div v-else-if="thumbErrors[files[0].id]" class="image-thumb image-thumb--error">
+            图片文件已丢失<br />请删除后重新上传
+          </div>
           <div v-else class="image-thumb image-thumb--loading" />
           <div v-if="!disabled" class="image-action" title="删除" @click.stop="handleDelete(files[0])">
             <el-icon><Delete /></el-icon>
@@ -186,6 +189,8 @@ let previewFromThumb = false;
 const files = ref([...(props.modelValue || [])]);
 /** 图片缩略图：附件ID => blob 地址 */
 const thumbs = reactive({});
+/** 缩略图加载失败（服务器物理文件缺失）：附件ID => true */
+const thumbErrors = reactive({});
 
 /** 可上传数量上限：图片类默认每个位置 1 张，0 表示不限制 */
 const maxFiles = computed(() => (props.maxCount > 0 ? props.maxCount : isImage.value ? 1 : 0));
@@ -210,8 +215,10 @@ async function loadThumbs(list) {
           type: response.headers?.['content-type'] || 'image/jpeg',
         }),
       );
+      delete thumbErrors[file.id];
     } catch (error) {
-      // 单张失败不影响其他图片
+      // 单张失败不影响其他图片（多为服务器物理文件已被清理）
+      thumbErrors[file.id] = true;
     }
   }
 }
@@ -225,6 +232,8 @@ function revokeThumb(id) {
     URL.revokeObjectURL(thumbs[id]);
     delete thumbs[id];
   }
+
+  delete thumbErrors[id];
 }
 
 // 父组件异步加载附件后同步到内部列表
@@ -626,6 +635,18 @@ async function handleDelete(row) {
   background: linear-gradient(90deg, #f2f3f5 25%, #e9ebef 37%, #f2f3f5 63%);
   background-size: 400% 100%;
   animation: image-skeleton 1.4s ease infinite;
+}
+
+.image-thumb--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f56c6c;
+  background: #fef0f0;
+  cursor: default;
 }
 
 @keyframes image-skeleton {
