@@ -9,7 +9,7 @@
           </h2>
           <p class="text-muted">
             {{ detail.proposal_no }} · 版本 V{{ detail.version }} · 供应商
-            {{ detail.user?.real_name || '-' }}
+            {{ detail.supplier || '-' }}
           </p>
         </div>
 

@@ -43,8 +43,8 @@
           <StatusTag :status="row.status" />
         </template>
       </el-table-column>
-      <el-table-column v-if="showOwner" label="供应商" width="110">
-        <template #default="{ row }">{{ row.user?.real_name || '-' }}</template>
+      <el-table-column v-if="showOwner" label="供应商" width="110" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.supplier || '-' }}</template>
       </el-table-column>
       <el-table-column prop="update_time" label="更新时间" width="170" align="center" />
       <el-table-column label="操作" width="360" fixed="right" align="center">

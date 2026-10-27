@@ -134,7 +134,7 @@ const ALL_COLUMNS = [
   { key: 'proposal_no', label: '方案编号', width: 170 },
   { key: 'version', label: '版本', width: 70, type: 'version' },
   { key: 'status', label: '状态', width: 130, type: 'status' },
-  { key: 'user_name', label: '供应商', width: 100, type: 'user' },
+  { key: 'user_name', label: '提交人', width: 100, type: 'user' },
   { key: 'part_no', label: '零件号', width: 140 },
   { key: 'part_name', label: '零件名称', width: 170 },
   { key: 'project_model', label: '项目车型', width: 140 },
