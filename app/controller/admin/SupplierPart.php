@@ -52,6 +52,10 @@ class SupplierPart extends BaseController
             $query->where('supplier_name', $supplier);
         }
 
+        // 过滤已软删除供应商遗留的零件号（历史数据兼容）
+        $supplierNames = Supplier::column('name');
+        $query->whereIn('supplier_name', $supplierNames === [] ? [''] : $supplierNames);
+
         $total = (clone $query)->count();
         $list  = $query->order('supplier_name')->order('part_no')->page($page, $pageSize)->select();
 

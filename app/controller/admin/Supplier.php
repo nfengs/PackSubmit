@@ -8,6 +8,8 @@ use app\exception\BizException;
 use app\model\MasterLog;
 use app\model\PackProposal;
 use app\model\Supplier as SupplierModel;
+use app\model\SupplierContact;
+use app\model\SupplierPart;
 use app\model\User;
 use app\service\AuditService;
 use app\service\MasterLogService;
@@ -138,7 +140,9 @@ class Supplier extends BaseController
                 ]);
 
                 if ($oldName !== $name) {
+                    // 账号归属与指定零件号都按供应商名称关联，改名需同步
                     User::where('dept', $oldName)->update(['dept' => $name]);
+                    SupplierPart::where('supplier_name', $oldName)->update(['supplier_name' => $name]);
                 }
 
                 $changes = MasterLogService::changes(MasterLog::BIZ_SUPPLIER, $before, $supplier->toArray());
@@ -411,14 +415,37 @@ class Supplier extends BaseController
 
         $name = (string) $supplier->name;
 
+        // 从属数据统计（删除前）
+        $contactCount = SupplierContact::where('supplier_id', $id)->count();
+        $partCount    = SupplierPart::where('supplier_name', $name)->count();
+
         Db::transaction(function () use ($supplier, $name, $id) {
+            // 清理从属数据：避免已删除供应商的联系人、零件号继续被拉取，
+            // 也避免同名供应商重新创建后继承旧数据
+            SupplierContact::where('supplier_id', $id)->delete();
+            SupplierPart::where('supplier_name', $name)->delete();
+
             // 软删除并改写名称，释放唯一索引，便于重新创建同名供应商
             $supplier->save(['name' => $this->deletedName($name, $id)]);
             $supplier->delete();
         });
 
+        MasterLogService::record(
+            MasterLog::BIZ_SUPPLIER,
+            $id,
+            $name,
+            $this->userId(),
+            'supplier_delete',
+            sprintf('删除供应商；同时删除联系人 %d 条、指定零件号 %d 条', $contactCount, $partCount)
+        );
+
         AuditService::record($this->userId(), 'supplier_delete', 0, [
-            'content' => '删除供应商：' . $name,
+            'content' => sprintf(
+                '删除供应商：%s（联系人 %d 条、零件号 %d 条）',
+                $name,
+                $contactCount,
+                $partCount
+            ),
         ]);
 
         return $this->success([], '供应商已删除');

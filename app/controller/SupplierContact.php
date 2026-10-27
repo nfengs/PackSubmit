@@ -69,6 +69,10 @@ class SupplierContact extends BaseController
             }
         }
 
+        // 过滤已软删除供应商遗留的联系人（历史数据兼容）
+        $supplierIds = Supplier::column('id');
+        $query->whereIn('supplier_id', $supplierIds === [] ? [0] : $supplierIds);
+
         $list = $query->order('is_default', 'desc')->order('id', 'asc')->select()->toArray();
 
         return $this->success([

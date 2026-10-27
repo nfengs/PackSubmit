@@ -61,8 +61,34 @@ class Proposal extends BaseController
         $total = (clone $query)->count();
         $list  = $query->order('id', 'desc')->page($page, $pageSize)->select();
 
+        // 已归档方案是否已存在审批中的变更，用于判断「发起变更」按钮
+        $archivedIds = [];
+
+        foreach ($list as $item) {
+            if ((int) $item->status === PackProposal::STATUS_ARCHIVED) {
+                $archivedIds[] = (int) $item->id;
+            }
+        }
+
+        $changingIds = $archivedIds === [] ? [] : array_map('intval', PackProposal::whereIn('source_proposal_id', $archivedIds)
+            ->whereIn('status', PackProposal::ACTIVE_STATUSES)
+            ->column('source_proposal_id'));
+
+        // 逐行下发操作权限，避免前端自行判断（供应商内数据互通，不能只比对 user_id）
+        $rows = [];
+
+        foreach ($list as $item) {
+            $row                = $item->toArray();
+            $row['permissions'] = $this->permissions(
+                $item,
+                $user,
+                in_array((int) $item->id, $changingIds, true)
+            );
+            $rows[] = $row;
+        }
+
         return $this->success([
-            'list'      => $list->toArray(),
+            'list'      => $rows,
             'total'     => $total,
             'page'      => $page,
             'page_size' => $pageSize,
@@ -515,9 +541,10 @@ class Proposal extends BaseController
      * 当前用户对方案的可执行操作
      * @param PackProposal $proposal
      * @param User         $user
+     * @param bool|null    $hasActiveChange 是否已有审批中的变更（列表批量预判，null 时单条查询）
      * @return array
      */
-    protected function permissions(PackProposal $proposal, User $user): array
+    protected function permissions(PackProposal $proposal, User $user, ?bool $hasActiveChange = null): array
     {
         $role             = (int) $user->role;
         $status           = (int) $proposal->status;
@@ -543,7 +570,7 @@ class Proposal extends BaseController
             'can_change'  => $role !== User::ROLE_REVIEWER
                 && ($isSupplierMember || $isAdmin)
                 && $status === PackProposal::STATUS_ARCHIVED
-                && !ProposalService::hasActiveChange((int) $proposal->id),
+                && !($hasActiveChange ?? ProposalService::hasActiveChange((int) $proposal->id)),
         ];
     }
 }

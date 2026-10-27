@@ -52,22 +52,22 @@
           <el-button link type="primary" @click="router.push(`/proposal/detail/${row.id}`)">
             查看
           </el-button>
-          <el-button v-if="canEdit(row)" link type="primary" @click="router.push(`/proposal/edit/${row.id}`)">
+          <el-button v-if="row.permissions?.can_edit" link type="primary" @click="router.push(`/proposal/edit/${row.id}`)">
             编辑
           </el-button>
-          <el-button v-if="canSubmit(row)" link type="success" @click="handleSubmit(row)">
+          <el-button v-if="row.permissions?.can_submit" link type="success" @click="handleSubmit(row)">
             提交
           </el-button>
-          <el-button v-if="canWithdraw(row)" link type="warning" @click="handleWithdraw(row)">
+          <el-button v-if="row.permissions?.can_withdraw" link type="warning" @click="handleWithdraw(row)">
             撤回
           </el-button>
-          <el-button v-if="canReview(row)" link type="warning" @click="openReview(row)">
+          <el-button v-if="row.permissions?.can_review" link type="warning" @click="openReview(row)">
             评审
           </el-button>
-          <el-button v-if="canChange(row)" link type="warning" @click="handleChange(row)">
+          <el-button v-if="row.permissions?.can_change" link type="warning" @click="handleChange(row)">
             发起变更
           </el-button>
-          <el-button v-if="canDelete(row)" link type="danger" @click="handleDelete(row)">
+          <el-button v-if="row.permissions?.can_delete" link type="danger" @click="handleDelete(row)">
             {{ Number(row.source_proposal_id) > 0 ? '取消变更并删除草稿' : '删除' }}
           </el-button>
         </template>
@@ -176,60 +176,9 @@ const query = reactive({
   page_size: 10,
 });
 
+// 行内操作按钮统一由后端逐行下发的 permissions 决定，与详情页保持一致
 const canCreate = computed(() => !userStore.isReviewer && !userStore.isViewer);
 const showOwner = computed(() => !userStore.isSubmitter);
-
-/**
- * 按钮权限：编辑（供应商/管理员，草稿或驳回）
- */
-function canEdit(row) {
-  return (
-    !userStore.isReviewer &&
-    (userStore.isAdmin || userStore.user?.id === row.user_id) &&
-    [STATUS.DRAFT, STATUS.REJECTED].includes(Number(row.status))
-  );
-}
-
-function canSubmit(row) {
-  return canEdit(row);
-}
-
-/**
- * 按钮权限：撤回（供应商/管理员，待评审）
- */
-function canWithdraw(row) {
-  return (
-    !userStore.isReviewer &&
-    (userStore.isAdmin || userStore.user?.id === row.user_id) &&
-    Number(row.status) === STATUS.PENDING
-  );
-}
-
-function canReview(row) {
-  return (
-    (userStore.isReviewer || userStore.isAdmin) && Number(row.status) === STATUS.PENDING
-  );
-}
-
-function canDelete(row) {
-  return (
-    (userStore.isAdmin || userStore.user?.id === row.user_id) &&
-    Number(row.status) === STATUS.DRAFT &&
-    // 导入生成的方案不允许删除，只有变更草稿可删除（终止变更）
-    (userStore.isAdmin || Number(row.source_proposal_id) > 0)
-  );
-}
-
-/**
- * 按钮权限：发起变更（供应商/管理员，已归档）
- */
-function canChange(row) {
-  return (
-    !userStore.isReviewer &&
-    (userStore.isAdmin || userStore.user?.id === row.user_id) &&
-    Number(row.status) === STATUS.ARCHIVED
-  );
-}
 
 const customerLabel = (value) =>
   customers.value.find((item) => item.value === value)?.label || value || '-';
