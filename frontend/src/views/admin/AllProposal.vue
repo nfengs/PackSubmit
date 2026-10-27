@@ -267,7 +267,7 @@ async function handleExport() {
       规格尺寸: row.spec || '',
       数量: row.quantity ?? 0,
       供应商: row.supplier || '',
-      提交人: row.user?.real_name || '',
+      创建人: row.user?.real_name || '',
       版本: `V${row.version}`,
       状态: STATUS_MAP[Number(row.status)]?.label || '',
       提交时间: row.submit_time || '',

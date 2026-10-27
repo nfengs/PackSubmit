@@ -16,7 +16,8 @@ use think\model\relation\HasMany;
  * @property string $part_name
  * @property int    $version
  * @property int    $status
- * @property int    $user_id
+ * @property string $supplier 所属供应商名称，方案归属以此为准（不归属个人）
+ * @property int    $user_id  创建人ID，仅用于留痕，不参与归属/权限判断
  * @property int    $source_proposal_id 变更来源方案ID，0 表示非变更方案
  */
 class PackProposal extends Model

@@ -8,7 +8,6 @@ use app\exception\BizException;
 use app\model\PartLog;
 use app\model\Supplier;
 use app\model\SupplierPart as SupplierPartModel;
-use app\model\User;
 use app\service\AuditService;
 use app\service\ProposalService;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -90,22 +89,7 @@ class SupplierPart extends BaseController
         $skipped  = 0;
         $drafts   = 0;
         $errors   = [];
-        $warnings = [];
         $operator = $this->currentUser();
-
-        // 供应商供应商缓存：方案草稿归属该供应商的供应商账号
-        $ownerCache = [];
-        $ownerOf = static function (string $supplierName) use (&$ownerCache): ?User {
-            if (!array_key_exists($supplierName, $ownerCache)) {
-                $ownerCache[$supplierName] = User::where('role', User::ROLE_SUBMITTER)
-                    ->where('dept', $supplierName)
-                    ->where('status', User::STATUS_ENABLED)
-                    ->order('id')
-                    ->find();
-            }
-
-            return $ownerCache[$supplierName];
-        };
 
         foreach ($rows as $row) {
             $lineNo       = $row['line'];
@@ -186,18 +170,12 @@ class SupplierPart extends BaseController
             }
 
             // 导入即生成方案草稿：已有有效方案（含已归档）的零件不重复生成
+            // 方案只归属供应商，无需该供应商存在个人账号
             if (ProposalService::hasPartProposal($supplierName, $partNo)) {
                 continue;
             }
 
-            $owner = $ownerOf($supplierName);
-
-            if (!$owner) {
-                $warnings[] = "第 {$lineNo} 行：供应商「{$supplierName}」未绑定供应商账号，未生成方案草稿";
-                continue;
-            }
-
-            if (ProposalService::createDraftFromPart($part, $owner, $operator)) {
+            if (ProposalService::createDraftFromPart($part, $operator)) {
                 $drafts++;
             }
         }
@@ -212,7 +190,6 @@ class SupplierPart extends BaseController
             'skipped'  => $skipped,
             'drafts'   => $drafts,
             'errors'   => array_slice($errors, 0, 20),
-            'warnings' => array_slice($warnings, 0, 20),
         ], '导入完成');
     }
 

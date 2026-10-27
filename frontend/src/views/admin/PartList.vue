@@ -222,9 +222,6 @@
           <strong>{{ importResult.skipped }}</strong> 条，生成方案草稿
           <strong>{{ importResult.drafts || 0 }}</strong> 条
         </p>
-        <ul v-if="importResult.warnings && importResult.warnings.length" class="import-warning">
-          <li v-for="(item, index) in importResult.warnings" :key="index">{{ item }}</li>
-        </ul>
         <ul v-if="importResult.errors && importResult.errors.length">
           <li v-for="(item, index) in importResult.errors" :key="index">{{ item }}</li>
         </ul>
@@ -602,9 +599,5 @@ onMounted(() => {
 
 .import-result ul + ul {
   margin-top: 6px;
-}
-
-.import-result .import-warning {
-  color: #e6a23c;
 }
 </style>

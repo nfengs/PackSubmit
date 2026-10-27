@@ -22,7 +22,7 @@ class Proposal extends BaseController
 {
     /**
      * 方案列表
-     * 供应商自动追加 user_id 过滤；评审员排除他人草稿；管理员查看全量
+     * 方案归属供应商：供应商按所属供应商名称过滤；评审员排除他人草稿；管理员查看全量
      * @return Json
      */
     public function index(): Json
@@ -74,7 +74,7 @@ class Proposal extends BaseController
             ->whereIn('status', PackProposal::ACTIVE_STATUSES)
             ->column('source_proposal_id'));
 
-        // 逐行下发操作权限，避免前端自行判断（供应商内数据互通，不能只比对 user_id）
+        // 逐行下发操作权限，避免前端自行判断（方案只归属供应商，同供应商账号互通）
         $rows = [];
 
         foreach ($list as $item) {
@@ -454,7 +454,7 @@ class Proposal extends BaseController
     public function statistics(): Json
     {
         $user = $this->currentUser();
-        $base = $this->applyRoleScope(PackProposal::field('id,status,user_id'), $user);
+        $base = $this->applyRoleScope(PackProposal::field('id,status'), $user);
 
         $counts = [];
         foreach (array_keys(PackProposal::STATUS_TEXT) as $status) {
@@ -521,13 +521,13 @@ class Proposal extends BaseController
         $role = (int) $user->role;
 
         if ($role === User::ROLE_SUBMITTER) {
-            // 供应商内数据互通：可查看本供应商所有人员的方案
+            // 方案只归属供应商：本供应商全部账号共享；未绑定供应商档案的账号看不到方案
             $supplierName = ProposalService::supplierNameOf($user);
 
-            if ($supplierName !== '') {
-                $query->where('supplier', $supplierName);
+            if ($supplierName === '') {
+                $query->whereRaw('0 = 1');
             } else {
-                $query->where('user_id', (int) $user->id);
+                $query->where('supplier', $supplierName);
             }
         } elseif ($role === User::ROLE_REVIEWER) {
             // 评审员可查看所有已提交的方案，但不能查看他人草稿

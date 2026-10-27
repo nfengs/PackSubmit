@@ -140,9 +140,10 @@ class Supplier extends BaseController
                 ]);
 
                 if ($oldName !== $name) {
-                    // 账号归属与指定零件号都按供应商名称关联，改名需同步
+                    // 账号、指定零件号、方案都以供应商名称关联，改名需全部同步，避免方案丢失归属
                     User::where('dept', $oldName)->update(['dept' => $name]);
                     SupplierPart::where('supplier_name', $oldName)->update(['supplier_name' => $name]);
+                    PackProposal::where('supplier', $oldName)->update(['supplier' => $name]);
                 }
 
                 $changes = MasterLogService::changes(MasterLog::BIZ_SUPPLIER, $before, $supplier->toArray());

@@ -101,7 +101,8 @@ class User extends Model
     }
 
     /**
-     * 关联：提交的方案
+     * 关联：本人创建（提交）的方案
+     * 方案归属供应商，此关联仅用于留痕查询，不代表归属
      * @return HasMany
      */
     public function proposals(): HasMany

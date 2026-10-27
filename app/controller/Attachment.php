@@ -229,12 +229,9 @@ class Attachment extends BaseController
         // 物理文件可能已被清理，删除记录本身不受影响
         $attachment = $this->findAttachment($id, false);
         $user       = $this->currentUser();
+        $proposal   = $attachment->proposal;
 
-        if ((int) $user->role !== User::ROLE_ADMIN && (int) $attachment->user_id !== (int) $user->id) {
-            throw new BizException('只能删除自己上传的附件', 403, 403);
-        }
-
-        $proposal = $attachment->proposal;
+        // 附件随方案归属供应商，不按上传人隔离：同供应商任一账号均可维护（下方 assertEditable 校验）
 
         if ($proposal && (int) $proposal->status !== PackProposal::STATUS_DRAFT) {
             throw new BizException('方案已提交，不能删除附件');

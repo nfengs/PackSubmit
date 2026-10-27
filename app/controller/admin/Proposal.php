@@ -50,11 +50,6 @@ class Proposal extends BaseController
             $query->where('project_model', $project);
         }
 
-        $userId = (int) $this->request->param('user_id', 0);
-        if ($userId > 0) {
-            $query->where('user_id', $userId);
-        }
-
         $startDate = trim((string) $this->request->param('start_date', ''));
         if ($startDate !== '') {
             $query->where('create_time', '>=', $startDate . ' 00:00:00');
@@ -127,11 +122,6 @@ class Proposal extends BaseController
 
         if ($statuses !== []) {
             $query->whereIn('status', $statuses);
-        }
-
-        $userId = (int) $this->request->param('user_id', 0);
-        if ($userId > 0) {
-            $query->where('user_id', $userId);
         }
 
         // 是否带托盘交付：'' 不限，'0' / '1' 精确匹配

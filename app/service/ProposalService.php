@@ -214,8 +214,9 @@ class ProposalService
 
     /**
      * 新增方案
+     * 方案归属由 supplier 字段决定，user_id 仅记录创建人
      * @param array $data 已过滤的表单数据
-     * @param User  $user 供应商
+     * @param User  $user 创建人
      * @return PackProposal
      * @throws \Throwable
      */
@@ -307,13 +308,13 @@ class ProposalService
 
     /**
      * 管理员导入指定零件号时，直接生成方案草稿
+     * 方案只归属供应商（`supplier` 字段），不依赖、也不绑定任何供应商个人账号
      * @param SupplierPart $part     指定零件号
-     * @param User         $owner    方案归属的供应商供应商
-     * @param User         $operator 操作人（管理员）
+     * @param User         $operator 操作人（仅记录为创建人，不代表归属）
      * @return PackProposal|null 已存在有效方案时返回 null
      * @throws \Throwable
      */
-    public static function createDraftFromPart(SupplierPart $part, User $owner, User $operator): ?PackProposal
+    public static function createDraftFromPart(SupplierPart $part, User $operator): ?PackProposal
     {
         $supplier = trim((string) $part->supplier_name);
         $partNo   = trim((string) $part->part_no);
@@ -344,12 +345,13 @@ class ProposalService
             'project_model'    => (string) $part->project_name,
         ];
 
-        return Db::transaction(function () use ($data, $owner, $operator, $supplier, $partNo) {
+        return Db::transaction(function () use ($data, $operator, $supplier, $partNo) {
             $proposal = PackProposal::create(array_merge(self::filterFields($data), [
                 'proposal_no' => self::generateNo(),
                 'version'     => 1,
                 'status'      => PackProposal::STATUS_DRAFT,
-                'user_id'     => (int) $owner->id,
+                // 归属由 supplier 字段决定，user_id 仅记录创建人
+                'user_id'     => (int) $operator->id,
             ]));
 
             AuditService::record((int) $operator->id, 'create', (int) $proposal->id, [
@@ -500,14 +502,12 @@ class ProposalService
 
             $version = (int) $source->version + 1;
 
-            // 变更方案沿用原方案的归属人（管理员代发起时也保持供应商不变）
-            $ownerId = (int) $source->user_id > 0 ? (int) $source->user_id : (int) $user->id;
-
+            // 归属由 supplier 字段决定（管理员代发起也不改变归属），user_id 仅记录创建人
             $proposal = PackProposal::create(array_merge($data, [
                 'proposal_no'        => self::generateNo(),
                 'version'            => $version,
                 'status'             => PackProposal::STATUS_DRAFT,
-                'user_id'            => $ownerId,
+                'user_id'            => (int) $user->id,
                 'source_proposal_id' => (int) $source->id,
                 'reviewer_id'        => null,
                 'review_remark'      => '',
@@ -908,8 +908,8 @@ class ProposalService
     }
 
     /**
-     * 供应商内数据互通：当前用户是否可以以供应商身份操作该方案
-     * 即方案归属人为本人，或与本人属于同一供应商
+     * 当前用户是否可以以供应商身份操作该方案
+     * 方案只归属供应商（`supplier` 字段），同供应商的任意账号都可操作，不按个人隔离
      * @param PackProposal $proposal
      * @param User         $user
      * @return bool
@@ -920,17 +920,9 @@ class ProposalService
             return false;
         }
 
-        if ((int) $proposal->user_id === (int) $user->id) {
-            return true;
-        }
-
         $name = self::supplierNameOf($user);
 
-        if ($name === '') {
-            return false;
-        }
-
-        return $name === trim((string) $proposal->supplier);
+        return $name !== '' && $name === trim((string) $proposal->supplier);
     }
 
     /**

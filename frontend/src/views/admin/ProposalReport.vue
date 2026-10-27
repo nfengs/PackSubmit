@@ -35,9 +35,6 @@
       >
         <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-select v-model="query.user_id" placeholder="供应商" clearable filterable style="width: 150px">
-        <el-option v-for="item in submitters" :key="item.id" :label="item.real_name || item.username" :value="item.id" />
-      </el-select>
       <el-select v-model="query.with_pallet" placeholder="是否带托盘" clearable style="width: 130px">
         <el-option label="带托盘" :value="1" />
         <el-option label="不带托盘" :value="0" />
@@ -124,7 +121,7 @@ import { ElMessage } from 'element-plus';
 import { Download } from '@element-plus/icons-vue';
 import * as XLSX from 'xlsx';
 import StatusTag from '@/components/StatusTag.vue';
-import { getProposalDetailList, getUserList } from '@/api/admin';
+import { getProposalDetailList } from '@/api/admin';
 import { getProjects } from '@/api/proposal';
 import { getCustomers, getSuppliers } from '@/api/masterData';
 import { STATUS_MAP, STATUS_OPTIONS, PACK_MATERIAL_OPTIONS } from '@/utils/constants';
@@ -134,7 +131,7 @@ const ALL_COLUMNS = [
   { key: 'proposal_no', label: '方案编号', width: 170 },
   { key: 'version', label: '版本', width: 70, type: 'version' },
   { key: 'status', label: '状态', width: 130, type: 'status' },
-  { key: 'user_name', label: '提交人', width: 100, type: 'user' },
+  { key: 'user_name', label: '创建人', width: 100, type: 'user' },
   { key: 'part_no', label: '零件号', width: 140 },
   { key: 'part_name', label: '零件名称', width: 170 },
   { key: 'project_model', label: '项目车型', width: 140 },
@@ -212,7 +209,6 @@ const total = ref(0);
 const customers = ref([]);
 const suppliers = ref([]);
 const projects = ref([]);
-const submitters = ref([]);
 const dateRange = ref([]);
 
 const query = reactive({
@@ -222,7 +218,6 @@ const query = reactive({
   supplier: '',
   project: '',
   status: [],
-  user_id: '',
   with_pallet: '',
   date_field: 'create_time',
   page: 1,
@@ -279,7 +274,6 @@ function buildParams() {
     customer: query.customer,
     supplier: query.supplier,
     project: query.project,
-    user_id: query.user_id || 0,
     with_pallet: query.with_pallet === 0 || query.with_pallet === 1 ? query.with_pallet : '',
     date_field: query.date_field,
     start_date: dateRange.value?.[0] || '',
@@ -296,21 +290,15 @@ function buildParams() {
 }
 
 async function loadOptions() {
-  const [customerList, supplierList, projectList, userData] = await Promise.all([
+  const [customerList, supplierList, projectList] = await Promise.all([
     getCustomers(),
     getSuppliers(),
     getProjects(),
-    getUserList({ role: 1, page_size: 100 }),
   ]);
 
   customers.value = (customerList || []).map((item) => item.name).filter(Boolean);
   suppliers.value = (supplierList || []).map((item) => item.name).filter(Boolean);
   projects.value = projectList || [];
-  submitters.value = (userData?.list || []).map((item) => ({
-    id: item.id,
-    real_name: item.real_name,
-    username: item.username,
-  }));
 }
 
 async function loadList() {
@@ -337,7 +325,6 @@ function handleReset() {
   query.supplier = '';
   query.project = '';
   query.status = [];
-  query.user_id = '';
   query.with_pallet = '';
   query.date_field = 'create_time';
   dateRange.value = [];
