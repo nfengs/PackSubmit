@@ -22,6 +22,11 @@ import { useUserStore } from '@/store/user';
 
 const route = useRoute();
 const router = useRouter();
+
+// 零件号 / 零件名称点击进入详情
+function openDetail(row) {
+  router.push(`/proposals/${row.id}`);
+}
 const userStore = useUserStore();
 
 const isAllMode = computed(() => route.path.startsWith('/admin'));
@@ -255,10 +260,21 @@ onMounted(() => {
     <el-table :data="rows" v-loading="loading" size="small" :row-key="(row) => row.id"
       @selection-change="onSelectionChange">
       <el-table-column v-if="isAllMode" type="selection" width="46" :selectable="selectable" />
-      <el-table-column prop="proposal_no" label="方案编号" width="150" />
+      <el-table-column prop="project_model" label="项目车型" width="150" show-overflow-tooltip />
+      <el-table-column prop="part_no" label="零件号" width="150" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="link-cell" @click="openDetail(row)">{{ row.part_no || '-' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="part_name" label="零件名称" min-width="160" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span class="link-cell" @click="openDetail(row)">{{ row.part_name || '-' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="版本" width="70">
         <template #default="{ row }">V{{ row.version }}</template>
       </el-table-column>
+      <el-table-column prop="proposal_no" label="方案编号" width="150" />
       <el-table-column label="状态" width="120">
         <template #default="{ row }">
           <el-tag size="small" :type="STATUS_TAG[row.status]" effect="light">
@@ -267,17 +283,13 @@ onMounted(() => {
         </template>
       </el-table-column>
       <el-table-column prop="customer_name" label="客户" width="110" show-overflow-tooltip />
-      <el-table-column prop="project_model" label="项目车型" width="140" show-overflow-tooltip />
-      <el-table-column prop="part_no" label="零件号" width="140" show-overflow-tooltip />
-      <el-table-column prop="part_name" label="零件名称" min-width="150" show-overflow-tooltip />
       <el-table-column prop="supplier_name" label="供应商" width="130" show-overflow-tooltip />
       <el-table-column prop="creator_name" label="创建人" width="100" />
       <el-table-column label="提交时间" width="160">
         <template #default="{ row }">{{ formatDateTime(row.submit_time) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="130" fixed="right">
+      <el-table-column label="操作" width="100" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="router.push(`/proposals/${row.id}`)">查看</el-button>
           <el-dropdown trigger="click" @command="(command) => handleAction(command, row)">
             <el-button link type="primary">更多<el-icon><component :is="'ArrowDown'" /></el-icon></el-button>
             <template #dropdown>
@@ -308,3 +320,14 @@ onMounted(() => {
     <ReviewDialog v-model="reviewVisible" :proposal="reviewTarget" @success="load" />
   </div>
 </template>
+
+<style scoped>
+.link-cell {
+  color: var(--el-color-primary);
+  cursor: pointer;
+}
+
+.link-cell:hover {
+  text-decoration: underline;
+}
+</style>
