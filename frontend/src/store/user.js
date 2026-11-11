@@ -1,79 +1,59 @@
 import { defineStore } from 'pinia';
-import { login as loginApi, logout as logoutApi, getProfile } from '@/api/auth';
-import { getToken, setToken, removeToken } from '@/utils/auth';
-import { ROLE, ROLE_TEXT } from '@/utils/constants';
+import { getProfile, login as loginApi, logout as logoutApi } from '@/api/auth';
+import { getToken, removeToken, setToken } from '@/utils/token';
 
-/**
- * 用户状态：token、用户信息、角色
- */
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: getToken(),
     user: null,
+    menus: [],
+    routes: [],
+    permissions: [],
   }),
-
   getters: {
-    /** 当前角色（数字） */
-    role: (state) => Number(state.user?.role || 0),
-    /** 是否管理员 */
-    isAdmin: (state) => Number(state.user?.role || 0) === ROLE.ADMIN,
-    /** 是否评审员 */
-    isReviewer: (state) => Number(state.user?.role || 0) === ROLE.REVIEWER,
-    /** 是否供应商 */
-    isSubmitter: (state) => Number(state.user?.role || 0) === ROLE.SUBMITTER,
-    /** 是否查看者（内部只读） */
-    isViewer: (state) => Number(state.user?.role || 0) === ROLE.VIEWER,
-    /** 角色名称 */
-    roleName: (state) => ROLE_TEXT[Number(state.user?.role || 0)] || '',
-    /** 显示名称 */
+    isAdmin: (state) => state.user?.role === 3,
     displayName: (state) => state.user?.real_name || state.user?.username || '',
+    hasPerm: (state) => (code) => {
+      const codes = Array.isArray(code) ? code : [code];
+      return codes.some((item) => state.permissions.includes(item));
+    },
   },
-
   actions: {
-    /**
-     * 登录：token 写入 Pinia 与 localStorage
-     * @param {{username:string,password:string}} payload
-     */
+    applySession(data) {
+      if (data?.token) {
+        setToken(data.token);
+        this.token = data.token;
+      }
+      this.user = data?.user || null;
+      this.menus = data?.menus || [];
+      this.routes = data?.routes || [];
+      this.permissions = data?.permissions || [];
+    },
     async login(payload) {
       const data = await loginApi(payload);
-      this.token = data.token;
-      this.user = data.user;
-      setToken(data.token);
+      this.applySession(data);
       return data;
     },
-
-    /**
-     * 更新本地 token（改密后补发、静默刷新）
-     * @param {string} token
-     */
-    applyToken(token) {
-      if (!token) return;
-      this.token = token;
-      setToken(token);
-    },
-
-    /** 拉取当前用户信息（刷新页面后恢复会话） */
     async fetchProfile() {
       const data = await getProfile();
-      this.user = data;
+      this.applySession(data);
       return data;
     },
-
-    /** 退出登录 */
     async logout() {
       try {
         await logoutApi();
       } catch (e) {
-        // 忽略退出接口异常
+        // 忽略退出接口异常，本地状态仍需清理
       }
-      this.reset();
+      this.clear();
     },
-
-    /** 清空本地登录态 */
-    reset() {
+    clear() {
+      removeToken();
       this.token = '';
       this.user = null;
-      removeToken();
+      this.menus = [];
+      this.routes = [];
+      this.permissions = [];
     },
   },
 });

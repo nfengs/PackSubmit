@@ -1,329 +1,276 @@
-<template>
-  <div class="page-card">
-    <!-- 筛选区 -->
-    <div class="page-toolbar">
-      <el-input
-        v-model="query.keyword"
-        placeholder="方案编号 / 零件名称 / 零件号"
-        clearable
-        style="width: 220px"
-        @keyup.enter="handleSearch"
-      />
-      <el-select v-model="query.customer" placeholder="客户" clearable style="width: 150px">
-        <el-option v-for="item in customers" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
-      <el-select v-model="query.project" placeholder="项目" clearable filterable style="width: 170px">
-        <el-option v-for="item in projects" :key="item" :label="item" :value="item" />
-      </el-select>
-      <el-select v-model="query.status" placeholder="状态" clearable style="width: 140px">
-        <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
-      <el-button type="primary" @click="handleSearch">查询</el-button>
-      <el-button @click="handleReset">重置</el-button>
-      <div class="spacer" />
-      <el-button v-if="canCreate" type="success" plain @click="openCopy">
-        <el-icon><CopyDocument /></el-icon>
-        发起变更
-      </el-button>
-    </div>
-
-    <!-- 列表 -->
-    <el-table v-loading="loading" :data="list" border stripe>
-      <el-table-column prop="proposal_no" label="方案编号" width="170" />
-      <el-table-column prop="part_name" label="零件名称" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="part_no" label="零件号" width="150" show-overflow-tooltip />
-      <el-table-column label="客户" width="120">
-        <template #default="{ row }">{{ customerLabel(row.customer) }}</template>
-      </el-table-column>
-      <el-table-column prop="version" label="版本" width="80" align="center">
-        <template #default="{ row }">V{{ row.version }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="110" align="center">
-        <template #default="{ row }">
-          <StatusTag :status="row.status" />
-        </template>
-      </el-table-column>
-      <el-table-column v-if="showOwner" label="供应商" width="110" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.supplier || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="update_time" label="更新时间" width="170" align="center" />
-      <el-table-column label="操作" width="360" fixed="right" align="center">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="router.push(`/proposal/detail/${row.id}`)">
-            查看
-          </el-button>
-          <el-button v-if="row.permissions?.can_edit" link type="primary" @click="router.push(`/proposal/edit/${row.id}`)">
-            编辑
-          </el-button>
-          <el-button v-if="row.permissions?.can_submit" link type="success" @click="handleSubmit(row)">
-            提交
-          </el-button>
-          <el-button v-if="row.permissions?.can_withdraw" link type="warning" @click="handleWithdraw(row)">
-            撤回
-          </el-button>
-          <el-button v-if="row.permissions?.can_review" link type="warning" @click="openReview(row)">
-            评审
-          </el-button>
-          <el-button v-if="row.permissions?.can_change" link type="warning" @click="handleChange(row)">
-            发起变更
-          </el-button>
-          <el-button v-if="row.permissions?.can_delete" link type="danger" @click="handleDelete(row)">
-            {{ Number(row.source_proposal_id) > 0 ? '取消变更并删除草稿' : '删除' }}
-          </el-button>
-        </template>
-      </el-table-column>
-      <template #empty>
-        <span class="text-muted">暂无方案数据</span>
-      </template>
-    </el-table>
-
-    <div class="pagination-wrap">
-      <el-pagination
-        v-model:current-page="query.page"
-        v-model:page-size="query.page_size"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
-        @size-change="handleSearch"
-        @current-change="loadList"
-      />
-    </div>
-
-    <el-dialog v-model="copyVisible" title="发起变更" width="560px">
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        title="仅已归档方案可发起变更：生成版本 +1 的新草稿，包装内容与图片一并复制，可编辑后提交评审"
-        style="margin-bottom: 16px"
-      />
-      <el-select
-        v-model="copySourceId"
-        placeholder="输入方案编号 / 零件名称搜索已归档方案"
-        filterable
-        remote
-        clearable
-        :remote-method="searchCopySource"
-        :loading="copyLoading"
-        style="width: 100%"
-      >
-        <el-option
-          v-for="item in copyOptions"
-          :key="item.id"
-          :label="`${item.proposal_no} · ${item.part_name || '未填写零件名称'}（V${item.version}）`"
-          :value="item.id"
-        />
-      </el-select>
-
-      <template #footer>
-        <el-button @click="copyVisible = false">取消</el-button>
-        <el-button type="primary" :loading="copying" :disabled="!copySourceId" @click="handleCopy">
-          发起变更
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <ReviewDialog v-model="reviewVisible" :proposal="reviewTarget" @success="loadList" />
-  </div>
-</template>
-
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { CopyDocument } from '@element-plus/icons-vue';
-import StatusTag from '@/components/StatusTag.vue';
-import ReviewDialog from './ReviewDialog.vue';
+
 import {
-  getProposalList,
+  archiveProposals,
+  changeProposal,
   deleteProposal,
+  exportProposalExcel,
+  getProjects,
+  getProposals,
   submitProposal,
   withdrawProposal,
-  changeProposal,
-  getProjects,
 } from '@/api/proposal';
-import { getCustomers } from '@/api/masterData';
+import { saveBlob } from '@/api/attachment';
+import { getCustomers, getSuppliers } from '@/api/masterdata';
+import ReviewDialog from './ReviewDialog.vue';
+import { formatDateTime } from '@/utils/format';
+import { STATUS_OPTIONS, STATUS_TAG, STATUS_TEXT } from '@/utils/constants';
 import { useUserStore } from '@/store/user';
-import { STATUS, STATUS_OPTIONS } from '@/utils/constants';
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 
-const statusOptions = STATUS_OPTIONS;
+const isAllMode = computed(() => route.path.startsWith('/admin'));
+
 const loading = ref(false);
-const list = ref([]);
+const rows = ref([]);
 const total = ref(0);
-const customers = ref([]);
+const selection = ref([]);
 const projects = ref([]);
+const customers = ref([]);
+const suppliers = ref([]);
+
+const query = reactive({
+  page: 1,
+  page_size: 20,
+  status: '',
+  keyword: '',
+  customer: '',
+  supplier: '',
+  project: '',
+  part_no: '',
+  start_date: '',
+  end_date: '',
+});
+
+const dateRange = ref([]);
 
 const reviewVisible = ref(false);
 const reviewTarget = ref(null);
 
-const copyVisible = ref(false);
-const copyLoading = ref(false);
-const copying = ref(false);
-const copyOptions = ref([]);
-const copySourceId = ref(null);
-
-const query = reactive({
-  keyword: '',
-  customer: '',
-  project: '',
-  status: route.query.status !== undefined && route.query.status !== '' ? Number(route.query.status) : '',
-  page: 1,
-  page_size: 10,
-});
-
-// 行内操作按钮统一由后端逐行下发的 permissions 决定，与详情页保持一致
-const canCreate = computed(() => !userStore.isReviewer && !userStore.isViewer);
-const showOwner = computed(() => !userStore.isSubmitter);
-
-const customerLabel = (value) =>
-  customers.value.find((item) => item.value === value)?.label || value || '-';
-
-async function loadDict() {
-  const customerList = await getCustomers();
-  customers.value = (customerList || []).map((item) => ({ label: item.name, value: item.name }));
-}
-
-async function loadProjects() {
-  const data = await getProjects();
-  projects.value = data || [];
-}
-
-async function loadList() {
+async function load() {
   loading.value = true;
 
   try {
-    const data = await getProposalList({ ...query });
-    list.value = data.list || [];
+    const params = { ...query };
+    if (!params.status) delete params.status;
+    if (!params.customer) delete params.customer;
+    if (!params.supplier) delete params.supplier;
+    if (!params.project) delete params.project;
+
+    const data = await getProposals(params);
+    rows.value = data.list || [];
     total.value = data.total || 0;
   } finally {
     loading.value = false;
   }
 }
 
-function handleSearch() {
-  query.page = 1;
-  loadList();
+async function loadOptions() {
+  try {
+    const [projectList, customerList] = await Promise.all([getProjects(), getCustomers()]);
+    projects.value = projectList || [];
+    customers.value = customerList || [];
+
+    if (userStore.isAdmin) {
+      suppliers.value = (await getSuppliers()) || [];
+    }
+  } catch (e) {
+    // 下拉数据失败不阻塞列表
+  }
 }
 
-function handleReset() {
-  query.keyword = '';
-  query.customer = '';
-  query.project = '';
-  query.status = '';
+function search() {
   query.page = 1;
-  loadList();
+  load();
 }
 
-/**
- * 搜索可复制的源方案
- * @param {string} keyword
- */
-async function searchCopySource(keyword = '') {
-  copyLoading.value = true;
+function reset() {
+  Object.assign(query, {
+    page: 1,
+    status: '',
+    keyword: '',
+    customer: '',
+    supplier: '',
+    project: '',
+    part_no: '',
+    start_date: '',
+    end_date: '',
+  });
+  dateRange.value = [];
+  load();
+}
+
+watch(dateRange, (value) => {
+  query.start_date = value?.[0] || '';
+  query.end_date = value?.[1] || '';
+});
+
+watch(
+  () => route.query.status,
+  (value) => {
+    if (value !== undefined && value !== query.status) {
+      query.status = String(value);
+      query.page = 1;
+      load();
+    }
+  },
+);
+
+function handleAction(command, row) {
+  const actions = {
+    edit: () => router.push(`/proposals/${row.id}/edit`),
+    submit: () => runRowAction(row, '确认提交该方案进入评审？', () => submitProposal(row.id), '已提交评审'),
+    withdraw: () => runRowAction(row, '确认撤回该方案？撤回后回到草稿状态。', () => withdrawProposal(row.id), '已撤回'),
+    review: () => {
+      reviewTarget.value = row;
+      reviewVisible.value = true;
+    },
+    change: () =>
+      runRowAction(row, '确认发起变更？将生成版本 +1 的变更草稿，原方案继续有效。', () => changeProposal(row.id), '已发起变更'),
+    delete: () =>
+      runRowAction(row, '删除后不可恢复（附件与日志保留），确认删除？', () => deleteProposal(row.id), '删除成功'),
+    export: () => exportRow(row),
+  };
+
+  if (actions[command]) actions[command]();
+}
+
+async function runRowAction(row, message, action, successMessage) {
+  try {
+    await ElMessageBox.confirm(message, '操作确认', { type: 'warning' });
+  } catch (e) {
+    return;
+  }
+
+  await action();
+  ElMessage.success(successMessage);
+  load();
+}
+
+async function exportRow(row) {
+  const response = await exportProposalExcel(row.id);
+  const name = `包装确认单-${row.supplier_name || ''}-${row.part_no || ''}-${row.part_name || ''}.xlsx`;
+  await saveBlob(response, name.replace(/[\\/:*?"<>|]/g, ''));
+}
+
+async function batchArchive() {
+  if (!selection.value.length) {
+    ElMessage.warning('请先勾选需要归档的方案');
+    return;
+  }
 
   try {
-    const data = await getProposalList({
-      keyword,
-      status: STATUS.ARCHIVED,
-      page: 1,
-      page_size: 20,
+    await ElMessageBox.confirm(`确认归档选中的 ${selection.value.length} 条已通过方案？`, '批量归档', {
+      type: 'warning',
     });
-    copyOptions.value = data.list || [];
-  } finally {
-    copyLoading.value = false;
+  } catch (e) {
+    return;
   }
+
+  const data = await archiveProposals(selection.value.map((item) => item.id));
+  ElMessage.success(`已归档 ${data.count} 条方案`);
+  selection.value = [];
+  load();
 }
 
-function openCopy() {
-  copySourceId.value = null;
-  copyOptions.value = [];
-  copyVisible.value = true;
-  searchCopySource('');
+function selectable(row) {
+  return row.status === 2;
 }
 
-/**
- * 对选中的已归档方案发起变更，并跳转到编辑页
- */
-async function handleCopy() {
-  if (!copySourceId.value) return;
-
-  copying.value = true;
-
-  try {
-    const created = await changeProposal(copySourceId.value);
-    copyVisible.value = false;
-    ElMessage.success('变更方案已创建，请确认内容后提交评审');
-    router.push(`/proposal/edit/${created.id}`);
-  } finally {
-    copying.value = false;
-  }
-}
-
-/**
- * 行内发起变更
- * @param {object} row
- */
-async function handleChange(row) {
-  await ElMessageBox.confirm(
-    `确定对方案「${row.part_name || row.proposal_no}」发起变更吗？将生成版本 V${Number(row.version) + 1} 的变更草稿。`,
-    '发起变更',
-    { type: 'warning' },
-  );
-  const created = await changeProposal(row.id);
-  ElMessage.success('变更方案已创建，请确认内容后提交评审');
-  router.push(`/proposal/edit/${created.id}`);
-}
-
-async function handleSubmit(row) {
-  await ElMessageBox.confirm(
-    `确定提交方案「${row.part_name || row.proposal_no}」进入评审吗？提交后不可再编辑。`,
-    '提交评审',
-    { type: 'warning' },
-  );
-  await submitProposal(row.id);
-  ElMessage.success('提交成功，等待评审');
-  loadList();
-}
-
-async function handleWithdraw(row) {
-  await ElMessageBox.confirm(
-    `确定撤回方案「${row.part_name || row.proposal_no}」的提交吗？撤回后将退回草稿，可继续编辑。`,
-    '撤回提交',
-    { type: 'warning' },
-  );
-  await withdrawProposal(row.id);
-  ElMessage.success('已撤回提交，方案退回草稿');
-  loadList();
-}
-
-async function handleDelete(row) {
-  const isChange = Number(row.source_proposal_id) > 0;
-
-  await ElMessageBox.confirm(
-    isChange
-      ? `确定取消本次变更并删除变更草稿「${row.part_name || row.proposal_no}」吗？删除后原归档方案继续有效。`
-      : `确定删除方案「${row.part_name || row.proposal_no}」吗？删除后不可恢复。`,
-    isChange ? '取消变更并删除草稿' : '删除方案',
-    { type: 'warning' },
-  );
-  await deleteProposal(row.id);
-  ElMessage.success(isChange ? '已取消变更并删除草稿' : '删除成功');
-  loadList();
-}
-
-function openReview(row) {
-  reviewTarget.value = row;
-  reviewVisible.value = true;
+function onSelectionChange(rows) {
+  selection.value = rows;
 }
 
 onMounted(() => {
-  loadDict();
-  loadProjects();
-  loadList();
+  if (route.query.status !== undefined) query.status = String(route.query.status);
+  loadOptions();
+  load();
 });
 </script>
+
+<template>
+  <div class="page-card">
+    <div class="page-toolbar">
+      <el-input v-model="query.keyword" placeholder="方案编号 / 零件名称 / 零件号" clearable style="width: 240px"
+        @keyup.enter="search" />
+      <el-select v-model="query.status" placeholder="状态" clearable style="width: 140px">
+        <el-option v-for="item in STATUS_OPTIONS" :key="item.value" :label="item.label" :value="String(item.value)" />
+      </el-select>
+      <el-select v-model="query.customer" placeholder="客户" clearable filterable style="width: 150px">
+        <el-option v-for="item in customers" :key="item.id" :label="item.name" :value="item.name" />
+      </el-select>
+      <el-select v-model="query.project" placeholder="项目车型" clearable filterable style="width: 170px">
+        <el-option v-for="item in projects" :key="item" :label="item" :value="item" />
+      </el-select>
+      <el-select v-if="isAllMode" v-model="query.supplier" placeholder="供应商" clearable filterable style="width: 160px">
+        <el-option v-for="item in suppliers" :key="item.id" :label="item.name" :value="item.name" />
+      </el-select>
+      <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期"
+        end-placeholder="结束日期" style="width: 240px" />
+      <el-button type="primary" @click="search">查询</el-button>
+      <el-button @click="reset">重置</el-button>
+      <div class="spacer"></div>
+      <el-button v-if="isAllMode" type="success" @click="batchArchive">批量归档</el-button>
+    </div>
+
+    <el-table :data="rows" v-loading="loading" size="small" :row-key="(row) => row.id"
+      @selection-change="onSelectionChange">
+      <el-table-column v-if="isAllMode" type="selection" width="46" :selectable="selectable" />
+      <el-table-column prop="proposal_no" label="方案编号" width="150" />
+      <el-table-column label="版本" width="70">
+        <template #default="{ row }">V{{ row.version }}</template>
+      </el-table-column>
+      <el-table-column label="状态" width="120">
+        <template #default="{ row }">
+          <el-tag size="small" :type="STATUS_TAG[row.status]" effect="light">
+            {{ row.status_label || STATUS_TEXT[row.status] }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="customer_name" label="客户" width="110" show-overflow-tooltip />
+      <el-table-column prop="project_model" label="项目车型" width="140" show-overflow-tooltip />
+      <el-table-column prop="part_no" label="零件号" width="140" show-overflow-tooltip />
+      <el-table-column prop="part_name" label="零件名称" min-width="150" show-overflow-tooltip />
+      <el-table-column prop="supplier_name" label="供应商" width="130" show-overflow-tooltip />
+      <el-table-column prop="creator_name" label="创建人" width="100" />
+      <el-table-column label="提交时间" width="160">
+        <template #default="{ row }">{{ formatDateTime(row.submit_time) }}</template>
+      </el-table-column>
+      <el-table-column label="操作" width="130" fixed="right">
+        <template #default="{ row }">
+          <el-button link type="primary" @click="router.push(`/proposals/${row.id}`)">查看</el-button>
+          <el-dropdown trigger="click" @command="(command) => handleAction(command, row)">
+            <el-button link type="primary">更多<el-icon><component :is="'ArrowDown'" /></el-icon></el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-if="row.permissions?.edit" command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item v-if="row.permissions?.submit" command="submit">提交评审</el-dropdown-item>
+                <el-dropdown-item v-if="row.permissions?.withdraw" command="withdraw">撤回</el-dropdown-item>
+                <el-dropdown-item v-if="row.permissions?.review" command="review">评审</el-dropdown-item>
+                <el-dropdown-item v-if="row.permissions?.change" command="change">发起变更</el-dropdown-item>
+                <el-dropdown-item v-if="row.permissions?.delete" command="delete" divided>删除</el-dropdown-item>
+                <el-dropdown-item v-if="row.permissions?.export" command="export">导出确认单</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </template>
+      </el-table-column>
+      <template #empty>
+        <div class="empty">暂无符合条件的方案</div>
+      </template>
+    </el-table>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 14px">
+      <el-pagination v-model:current-page="query.page" v-model:page-size="query.page_size" :total="total"
+        :page-sizes="[10, 20, 50, 100]" layout="total, sizes, prev, pager, next"
+        @current-change="load" @size-change="search" />
+    </div>
+
+    <ReviewDialog v-model="reviewVisible" :proposal="reviewTarget" @success="load" />
+  </div>
+</template>

@@ -4,20 +4,24 @@ import ElementPlus from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import * as ElementPlusIconsVue from '@element-plus/icons-vue';
 import 'element-plus/dist/index.css';
-import '@/styles/index.css';
 
 import App from './App.vue';
 import router from './router';
+import { setupRouterGuard } from './router/permission';
+import permission from './directives/permission';
+import './styles/index.css';
 
 const app = createApp(App);
 
-// 全局注册 Element Plus 图标，便于菜单动态渲染
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component);
-}
+Object.entries(ElementPlusIconsVue).forEach(([name, component]) => {
+  app.component(name, component);
+});
 
 app.use(createPinia());
 app.use(router);
 app.use(ElementPlus, { locale: zhCn });
+app.directive('permission', permission);
+
+setupRouterGuard(router);
 
 app.mount('#app');

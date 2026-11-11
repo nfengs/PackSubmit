@@ -1,56 +1,69 @@
-import request from '@/utils/request';
+import { ElMessage } from 'element-plus';
+import request from './request';
 
-/**
- * 上传附件
- * @param {FormData} formData
- * @param {(event:ProgressEvent)=>void} onUploadProgress
- */
-export function uploadAttachment(formData, onUploadProgress) {
-  return request.post('/attachments/upload', formData, {
+// blob 请求遇到业务错误时后端返回 JSON，需要转成可读提示
+async function ensureBlob(response) {
+  const data = response.data;
+  if (data && data.type && data.type.includes('application/json')) {
+    const text = await data.text();
+    let message = '操作失败';
+
+    try {
+      message = JSON.parse(text).message || message;
+    } catch (e) {
+      // 非 JSON 内容按默认提示处理
+    }
+
+    ElMessage.error(message);
+    throw new Error(message);
+  }
+
+  return data;
+}
+
+export function uploadAttachment({ file, proposalId, attachType }) {
+  const form = new FormData();
+  form.append('file', file);
+  if (proposalId) form.append('proposal_id', proposalId);
+  if (attachType) form.append('attach_type', attachType);
+  return request.post('/attachments/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    onUploadProgress,
   });
 }
 
-/**
- * 绑定暂存附件到方案
- * @param {number} proposalId
- * @param {number[]} ids
- */
-export function bindAttachments(proposalId, ids) {
-  return request.post('/attachments/bind', { proposal_id: proposalId, ids });
+export function bindAttachment(attachmentId, proposalId) {
+  return request.post('/attachments/bind', { attachment_id: attachmentId, proposal_id: proposalId });
 }
 
-/** 删除附件 */
 export function deleteAttachment(id) {
   return request.delete(`/attachments/${id}`);
 }
 
-/** 下载附件（返回原始响应，含 headers） */
-export function downloadAttachment(id) {
-  return request.get(`/attachments/${id}/download`, { responseType: 'blob' });
+// 附件受鉴权保护，需带 token 读取为 blob 再预览
+export async function fetchAttachmentBlob(id, mode = 'preview') {
+  const response = await request.get(`/attachments/${id}/${mode}`, { responseType: 'blob' });
+  return URL.createObjectURL(response.data);
 }
 
-/** 预览附件（pdf/png/jpg） */
-export function previewAttachment(id) {
-  return request.get(`/attachments/${id}/preview`, { responseType: 'blob' });
+export async function downloadAttachment(id, fileName) {
+  const response = await request.get(`/attachments/${id}/download`, { responseType: 'blob' });
+  const url = URL.createObjectURL(await ensureBlob(response));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName || 'attachment';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
-/**
- * 从响应头解析文件名
- * @param {object} response
- * @param {string} fallback
- */
-export function resolveFileName(response, fallback = 'download') {
-  const disposition = response.headers?.['content-disposition'] || '';
-  const match =
-    /filename\*=UTF-8''([^;]+)/i.exec(disposition) || /filename="?([^";]+)"?/i.exec(disposition);
-
-  if (!match) return fallback;
-
-  try {
-    return decodeURIComponent(match[1]);
-  } catch (e) {
-    return match[1];
-  }
+export async function saveBlob(response, fileName) {
+  const url = URL.createObjectURL(await ensureBlob(response));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName || 'download';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

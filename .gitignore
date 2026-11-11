@@ -1,16 +1,20 @@
 *.log
 .env
-composer.phar
 .DS_Store
 Thumbs.db
 /.idea
 /.vscode
-/vendor
-/runtime
+
+# Go 后端
+/backend/bin
+/backend/logs
+/backend/tmp
+/backend/storage/attachments/*
+!/backend/storage/attachments/.gitkeep
+
+# 前端
 /frontend/node_modules
 /frontend/dist
-/public/assets
-/public/index.html
-/.settings
-/.buildpath
-/.project
+
+# 历史附件（旧 PHP 版本遗留，仅本地保留）
+/storage/attachments
