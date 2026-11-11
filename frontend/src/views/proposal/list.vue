@@ -285,22 +285,31 @@ onMounted(() => {
       <el-table-column label="提交时间" width="160">
         <template #default="{ row }">{{ formatDateTime(row.submit_time) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
-          <el-dropdown trigger="click" @command="(command) => handleAction(command, row)">
-            <el-button link type="primary">更多<el-icon><component :is="'ArrowDown'" /></el-icon></el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-if="row.permissions?.edit" command="edit">编辑</el-dropdown-item>
-                <el-dropdown-item v-if="row.permissions?.submit" command="submit">提交评审</el-dropdown-item>
-                <el-dropdown-item v-if="row.permissions?.withdraw" command="withdraw">撤回</el-dropdown-item>
-                <el-dropdown-item v-if="row.permissions?.review" command="review">评审</el-dropdown-item>
-                <el-dropdown-item v-if="row.permissions?.change" command="change">发起变更</el-dropdown-item>
-                <el-dropdown-item v-if="row.permissions?.delete" command="delete" divided>删除</el-dropdown-item>
-                <el-dropdown-item v-if="row.permissions?.export" command="export">导出确认单</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <div class="action-cell">
+            <el-button v-if="row.permissions?.edit" link type="primary" @click="handleAction('edit', row)">
+              编辑
+            </el-button>
+            <el-button v-if="row.permissions?.submit" link type="primary" @click="handleAction('submit', row)">
+              提交评审
+            </el-button>
+            <el-button v-if="row.permissions?.withdraw" link type="primary" @click="handleAction('withdraw', row)">
+              撤回
+            </el-button>
+            <el-button v-if="row.permissions?.review" link type="primary" @click="handleAction('review', row)">
+              评审
+            </el-button>
+            <el-button v-if="row.permissions?.change" link type="primary" @click="handleAction('change', row)">
+              发起变更
+            </el-button>
+            <el-button v-if="row.permissions?.delete" link type="danger" @click="handleAction('delete', row)">
+              删除
+            </el-button>
+            <el-button v-if="row.permissions?.export" link type="primary" @click="handleAction('export', row)">
+              导出
+            </el-button>
+          </div>
         </template>
       </el-table-column>
       <template #empty>
@@ -326,5 +335,16 @@ onMounted(() => {
 
 .link-cell:hover {
   text-decoration: underline;
+}
+
+/* 操作按钮平铺，不再折叠到「更多」下拉 */
+.action-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.action-cell .el-button + .el-button {
+  margin-left: 0;
 }
 </style>
