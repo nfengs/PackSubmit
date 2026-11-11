@@ -173,6 +173,39 @@ func (h *Handler) ProposalArchive(c *gin.Context) {
 	})
 }
 
+// AdminProposalReport 全量详细方案（52 字段明细，供报表页与导出使用）
+func (h *Handler) AdminProposalReport(c *gin.Context) {
+	page, size := pageParams(c)
+
+	// 报表页单页最多 500 条
+	if size > 500 {
+		size = 500
+	}
+
+	filter := service.ListFilter{
+		Page:       page,
+		PageSize:   size,
+		Status:     parseStatuses(c.Query("status")),
+		Keyword:    c.Query("keyword"),
+		Customer:   c.Query("customer"),
+		Supplier:   c.Query("supplier"),
+		Project:    c.Query("project"),
+		PartNo:     c.Query("part_no"),
+		WithPallet: c.Query("with_pallet"),
+		DateField:  c.Query("date_field"),
+		StartDate:  c.Query("start_date"),
+		EndDate:    c.Query("end_date"),
+	}
+
+	list, total, err := h.Proposals.Report(currentUser(c), filter)
+	if err != nil {
+		resp.Error(c, err)
+		return
+	}
+
+	resp.OKPage(c, list, total, page, size)
+}
+
 func (h *Handler) ProposalExportExcel(c *gin.Context) {
 	user := currentUser(c)
 

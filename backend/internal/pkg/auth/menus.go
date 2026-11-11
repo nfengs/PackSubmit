@@ -121,6 +121,13 @@ func Routes(role int8) []Menu {
 		})
 	}
 
+	if HasPermission(role, PermReportView) {
+		routes = append(routes, Menu{
+			Path: "/admin/proposals/detail", Name: "AdminProposalReport", Title: "全量详细方案",
+			Component: "admin/report", Permission: PermReportView,
+		})
+	}
+
 	if HasPermission(role, PermAuditView) {
 		routes = append(routes, Menu{
 			Path: "/audit", Name: "AuditLogs", Title: "审计日志",
@@ -165,6 +172,12 @@ func Menus(role int8) []Menu {
 		if HasPermission(role, PermProposalAll) {
 			children = append(children, Menu{
 				Path: "/admin/proposals", Name: "AdminProposals", Title: "全量方案", Icon: "Files",
+			})
+		}
+
+		if HasPermission(role, PermReportView) {
+			children = append(children, Menu{
+				Path: "/admin/proposals/detail", Name: "AdminProposalReport", Title: "全量详细方案", Icon: "DataAnalysis",
 			})
 		}
 

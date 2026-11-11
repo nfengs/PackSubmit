@@ -52,6 +52,10 @@ export function archiveProposals(ids) {
   return request.post('/admin/proposals/archive', { ids });
 }
 
+export function getProposalReport(params) {
+  return request.get('/admin/proposals/detail', { params });
+}
+
 export function getAuditLogs(params) {
   return request.get('/admin/audit-logs', { params });
 }

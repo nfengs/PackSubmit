@@ -60,7 +60,7 @@ func (s *ProposalService) scope(q *gorm.DB, user *model.User) *gorm.DB {
 	}
 }
 
-func (s *ProposalService) List(user *model.User, filter ListFilter) ([]dto.ProposalView, int64, error) {
+func clampPage(filter ListFilter, maxSize int) (int, int) {
 	page, size := filter.Page, filter.PageSize
 
 	if page < 1 {
@@ -69,12 +69,15 @@ func (s *ProposalService) List(user *model.User, filter ListFilter) ([]dto.Propo
 	if size < 1 {
 		size = 20
 	}
-	if size > 100 {
-		size = 100
+	if size > maxSize {
+		size = maxSize
 	}
 
-	q := s.scope(s.DB.Model(&model.Proposal{}), user)
+	return page, size
+}
 
+// applyFilters 列表与全量详细方案共用的筛选条件
+func (s *ProposalService) applyFilters(q *gorm.DB, filter ListFilter) *gorm.DB {
 	if len(filter.Status) > 0 {
 		q = q.Where("status IN ?", filter.Status)
 	}
@@ -114,6 +117,13 @@ func (s *ProposalService) List(user *model.User, filter ListFilter) ([]dto.Propo
 		q = q.Where(dateField+" <= ?", filter.EndDate+" 23:59:59")
 	}
 
+	return q
+}
+
+func (s *ProposalService) List(user *model.User, filter ListFilter) ([]dto.ProposalView, int64, error) {
+	page, size := clampPage(filter, 100)
+	q := s.applyFilters(s.scope(s.DB.Model(&model.Proposal{}), user), filter)
+
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -125,6 +135,24 @@ func (s *ProposalService) List(user *model.User, filter ListFilter) ([]dto.Propo
 	}
 
 	return s.enrich(rows, user), total, nil
+}
+
+// Report 全量详细方案：管理员报表，不做数据范围过滤，单页最多 500 条
+func (s *ProposalService) Report(user *model.User, filter ListFilter) ([]dto.ProposalView, int64, error) {
+	page, size := clampPage(filter, 500)
+	q := s.applyFilters(s.DB.Model(&model.Proposal{}), filter)
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var rows []model.Proposal
+	if err := q.Order("id DESC").Offset((page - 1) * size).Limit(size).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return s.enrichWith(rows, user, false), total, nil
 }
 
 func (s *ProposalService) Statistics(user *model.User) (*dto.Statistics, error) {
@@ -248,6 +276,11 @@ func (s *ProposalService) Get(user *model.User, id string) (*dto.ProposalDetail,
 }
 
 func (s *ProposalService) enrich(rows []model.Proposal, user *model.User) []dto.ProposalView {
+	return s.enrichWith(rows, user, true)
+}
+
+// enrichWith withPermissions=false 用于报表，避免逐行计算操作权限（含变更查询）
+func (s *ProposalService) enrichWith(rows []model.Proposal, user *model.User, withPermissions bool) []dto.ProposalView {
 	views := make([]dto.ProposalView, 0, len(rows))
 
 	ids := make(map[string]struct{})
@@ -268,7 +301,10 @@ func (s *ProposalService) enrich(rows []model.Proposal, user *model.User) []dto.
 			Proposal:    row,
 			StatusLabel: row.StatusLabel(),
 			CreatorName: names[row.CreatedBy],
-			Permissions: s.permissions(user, &row),
+		}
+
+		if withPermissions {
+			view.Permissions = s.permissions(user, &row)
 		}
 
 		if row.ReviewerID != nil {

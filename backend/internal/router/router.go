@@ -86,6 +86,7 @@ func New(h *handler.Handler, manager *auth.Manager, db *gorm.DB, cfg *config.Con
 		admin.Use(middleware.RequireRole(auth.RoleAdmin))
 		{
 			admin.POST("/proposals/archive", middleware.RequirePermission(auth.PermProposalArchive), h.ProposalArchive)
+			admin.GET("/proposals/detail", middleware.RequirePermission(auth.PermReportView), h.AdminProposalReport)
 			admin.GET("/audit-logs", middleware.RequirePermission(auth.PermAuditView), h.AuditLogs)
 
 			users := admin.Group("/users")

@@ -291,6 +291,7 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 | POST | `/admin/parts/batch-preview`、`/admin/parts/batch-update` | 批量修改预览 / 二次确认提交 |
 | PUT/DELETE | `/admin/parts/{id}`、`GET /admin/parts/{id}/logs` | 行内修改 / 删除 / 维护日志 |
 | GET/POST/PUT/DELETE | `/admin/dicts`、`/admin/dicts/{id}` | 字典维护 |
+| GET | `/admin/proposals/detail` | 全量详细方案（52 字段明细，单页上限 500，支持多条件筛选） |
 | POST | `/admin/proposals/archive` | 批量归档（变更归档时自动作废原方案） |
 | GET | `/admin/audit-logs` | 全局审计日志 |
 
@@ -370,8 +371,40 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 
 - 旧表（`pf_user`、`pf_pack_proposal` 等）保留在库中不删；新表为无前缀命名，两套可共存。
 - 旧附件仍在仓库根 `storage/attachments/`（已 gitignore），新附件写入 `backend/storage/attachments/`。
-- 旧库数据迁移工具（`pf_*` → 新表，含 ULID 映射、`supplier_name` → `supplier_id`）**尚未实现**，属下一阶段任务；当前请用 `-seed` 演示数据或重新导入主数据。
 - 旧的 `database/pack_submit.sql` 已删除，初始化统一走 `backend/migrations/`。
+
+迁移工具：`backend/cmd/migrate-legacy`（要求新表为空，先执行 `-migrate`，不要执行 `-seed`）。
+
+```bash
+cd backend
+
+# 1. 只统计，不写库
+PS_DB_PASSWORD=*** go run ./cmd/migrate-legacy -config configs/config.yaml -dry-run
+
+# 2. 实际迁移（会复制旧附件到 backend/storage/attachments）
+PS_DB_PASSWORD=*** go run ./cmd/migrate-legacy -config configs/config.yaml
+
+# 可选参数
+#   -legacy-prefix pf_              旧表前缀
+#   -legacy-storage ../storage/attachments   旧附件目录
+#   -storage storage/attachments    新附件目录
+```
+
+迁移内容与规则：
+
+| 旧表 | 新表 | 规则 |
+| --- | --- | --- |
+| `pf_user` | `users` | 生成 ULID；`$2y$` 密码哈希改写为 `$2b$` 以便 Go 校验；`token_version` 重置为 1（需重新登录） |
+| `pf_customer` / `pf_supplier` | `customers` / `suppliers` | 保留软删记录与时间 |
+| `pf_supplier_contact` | `supplier_contacts` | 按旧供应商 ID 映射 |
+| `pf_supplier_part` | `supplier_parts` | `supplier_name` → `supplier_id` |
+| `pf_dict` | `dicts` | 原样迁移 |
+| `pf_pack_proposal` | `proposals` | 映射创建人/评审人/客户/供应商；`source_proposal_id` 二次回填 |
+| `pf_attachment` | `attachments` | 复制物理文件到新目录并重命名，缺失文件跳过 |
+| `pf_review_log` | `audit_logs` | 保留动作、状态、版本、IP |
+| `pf_master_log` / `pf_part_log` | `master_logs` / `part_logs` | `target_id` 按业务类型映射 |
+
+迁移后建议核对：方案总数、状态分布、附件数量与文件可访问性；旧库数据如包含重复「供应商 + 零件号」有效方案，迁移不会自动合并，需要人工处理。
 
 ---
 
@@ -381,12 +414,16 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 
 已完成（第二阶段）：主数据管理（用户 / 客户 / 供应商 / 零件号 / 字典的增删改、Excel 导入、名称查重、页面内维护日志）、受控建单链路（导入零件号后自动生成方案草稿）、零件号批量修改（预览 + 二次确认）与方案名称同步、行内编辑与零件号维护日志。
 
-待补（第三阶段）：
+已完成（第三阶段）：
 
-1. 「全量详细方案」52 字段明细与导出（列设置 + 全字段 xlsx）。
-2. 旧库数据迁移工具（`pf_*` → 新表，含 ULID 映射与供应商 ID 转换）。
-3. PDF 导出（旧实现为 Dompdf，新方案建议 xlsx → PDF，待定）。
-4. 列表列配置 / 列宽持久化等体验增强。
+1. 「全量详细方案」：52 字段明细、多条件筛选、列设置（本地持久化）、全字段 xlsx 导出。
+2. 旧库迁移工具 `cmd/migrate-legacy`：ULID 映射、供应商/客户/用户关联转换、附件复制、日志迁移，支持 `-dry-run`。
+
+待补（第四阶段）：
+
+1. PDF 导出（旧实现为 Dompdf，新方案建议 xlsx → PDF，待定）。
+2. 列表列宽拖拽与持久化、导出进度提示等体验增强。
+3. 多实例部署所需的共享缓存（登录限流 / token 黑名单）。
 
 已知限制：
 

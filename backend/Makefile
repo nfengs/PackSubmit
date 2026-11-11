@@ -1,4 +1,4 @@
-.PHONY: tidy build run migrate seed test
+.PHONY: tidy build run migrate seed migrate-legacy migrate-legacy-dry test
 
 tidy:
 	go mod tidy
@@ -14,6 +14,12 @@ migrate:
 
 seed:
 	go run ./cmd/server -config configs/config.yaml -migrate -seed
+
+migrate-legacy-dry:
+	go run ./cmd/migrate-legacy -config configs/config.yaml -dry-run
+
+migrate-legacy:
+	go run ./cmd/migrate-legacy -config configs/config.yaml
 
 test:
 	go test ./...
