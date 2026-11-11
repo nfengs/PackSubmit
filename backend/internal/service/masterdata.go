@@ -99,11 +99,6 @@ func (s *MasterDataService) SupplierByID(id string) (*model.Supplier, error) {
 	return &supplier, nil
 }
 
-type ContactView struct {
-	model.SupplierContact
-	SupplierName string `json:"supplier_name"`
-}
-
 type ContactService struct {
 	DB *gorm.DB
 }
@@ -113,7 +108,7 @@ func NewContactService(db *gorm.DB) *ContactService {
 }
 
 // List 供应商固定返回本供应商；管理员可按供应商过滤或查看全部
-func (s *ContactService) List(user *model.User, supplierID string) ([]ContactView, error) {
+func (s *ContactService) List(user *model.User, supplierID string) ([]dto.ContactView, error) {
 	if user.Role != auth.RoleSupplier && user.Role != auth.RoleAdmin {
 		return nil, resp.Forbidden("无权访问供应商联系人")
 	}
@@ -122,7 +117,7 @@ func (s *ContactService) List(user *model.User, supplierID string) ([]ContactVie
 
 	if user.Role == auth.RoleSupplier {
 		if user.SupplierID == nil {
-			return []ContactView{}, nil
+			return []dto.ContactView{}, nil
 		}
 		q = q.Where("supplier_id = ?", *user.SupplierID)
 	} else if supplierID != "" {
@@ -151,10 +146,10 @@ func (s *ContactService) List(user *model.User, supplierID string) ([]ContactVie
 		}
 	}
 
-	views := make([]ContactView, 0, len(contacts))
+	views := make([]dto.ContactView, 0, len(contacts))
 
 	for _, item := range contacts {
-		views = append(views, ContactView{SupplierContact: item, SupplierName: names[item.SupplierID]})
+		views = append(views, dto.ContactView{SupplierContact: item, SupplierName: names[item.SupplierID]})
 	}
 
 	return views, nil

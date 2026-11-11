@@ -6,13 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packsubmit/internal/dto"
 	"packsubmit/internal/pkg/resp"
 )
-
-type bindAttachmentRequest struct {
-	AttachmentID string `json:"attachment_id"`
-	ProposalID   string `json:"proposal_id"`
-}
 
 func (h *Handler) AttachmentUpload(c *gin.Context) {
 	header, err := c.FormFile("file")
@@ -42,17 +38,12 @@ func (h *Handler) AttachmentUpload(c *gin.Context) {
 }
 
 func (h *Handler) AttachmentBind(c *gin.Context) {
-	var request bindAttachmentRequest
-	if !bindJSON(c, &request) {
+	var input dto.BindAttachmentInput
+	if !bindJSON(c, &input) {
 		return
 	}
 
-	if request.AttachmentID == "" || request.ProposalID == "" {
-		resp.Fail(c, resp.CodeParam, "缺少附件或方案编号")
-		return
-	}
-
-	if err := h.Attachments.Bind(currentUser(c), request.AttachmentID, request.ProposalID); err != nil {
+	if err := h.Attachments.Bind(currentUser(c), input.AttachmentID, input.ProposalID); err != nil {
 		resp.Error(c, err)
 		return
 	}

@@ -75,7 +75,7 @@ func (h *Handler) ProposalDetail(c *gin.Context) {
 }
 
 func (h *Handler) ProposalCreate(c *gin.Context) {
-	var input dto.ProposalInput
+	var input dto.ProposalCreateInput
 	if !bindJSON(c, &input) {
 		return
 	}
@@ -90,7 +90,7 @@ func (h *Handler) ProposalCreate(c *gin.Context) {
 }
 
 func (h *Handler) ProposalUpdate(c *gin.Context) {
-	var input dto.ProposalInput
+	var input dto.ProposalUpdateInput
 	if !bindJSON(c, &input) {
 		return
 	}

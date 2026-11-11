@@ -281,6 +281,14 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 
 所有写操作走 `service.Record`，记录操作人、IP、动作、状态前后值、版本、内容；查看/导出也写审计。方案详情里的「评审日志」过滤掉上传/删除附件、查看、导出等干扰项。
 
+**7. DTO 约定（薄 DTO）**
+
+- 请求一律走 `internal/dto` 的 Input 结构，**不直接绑定 GORM 模型**：模型的 `status / version / proposal_no / created_by / source_proposal_id` 等字段绝不由前端决定，`spec / quantity / pallet_parts_qty / write_date` 干脆不在 Input 中定义。
+- `ProposalCreateInput`（供应商必填）与 `ProposalUpdateInput`（整表单覆盖）分开，`ProposalFields` 承载公共可编辑字段。
+- 入参用 `binding` tag 声明必填、长度、枚举、范围；`bindJSON` 统一转成 `1001` + 中文文案（校验器已注册 JSON 字段名，如「缺少必填项：供应商」）。
+- 响应只在**结构与表不一致**时才建 View（`ProposalView / ProposalDetail / Statistics / ContactView / AuditLogView`）；客户、供应商、字典等直接输出模型，不做无意义的套壳。
+- 业务校验（提交完整性、以档案为准覆盖快照、派生字段计算）必须留在 service，DTO 只负责形状与格式。
+
 ---
 
 ## 十一、配置

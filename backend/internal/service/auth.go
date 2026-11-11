@@ -8,19 +8,11 @@ import (
 
 	"gorm.io/gorm"
 
+	"packsubmit/internal/dto"
 	"packsubmit/internal/model"
 	"packsubmit/internal/pkg/auth"
 	"packsubmit/internal/pkg/resp"
 )
-
-// Session 登录态：token + 用户 + 动态菜单/路由/权限
-type Session struct {
-	Token       string      `json:"token,omitempty"`
-	User        *model.User `json:"user"`
-	Menus       []auth.Menu `json:"menus"`
-	Routes      []auth.Menu `json:"routes"`
-	Permissions []string    `json:"permissions"`
-}
 
 type limitEntry struct {
 	count   int
@@ -114,7 +106,7 @@ func NewAuthService(db *gorm.DB, manager *auth.Manager, limiter *LoginLimiter) *
 	return &AuthService{DB: db, JWT: manager, Limiter: limiter}
 }
 
-func (s *AuthService) Login(username, password, ip string) (*Session, error) {
+func (s *AuthService) Login(username, password, ip string) (*dto.Session, error) {
 	username = strings.TrimSpace(username)
 
 	if username == "" || password == "" {
@@ -156,14 +148,14 @@ func (s *AuthService) Login(username, password, ip string) (*Session, error) {
 	return s.buildSession(&user, token)
 }
 
-func (s *AuthService) Profile(user *model.User) *Session {
+func (s *AuthService) Profile(user *model.User) *dto.Session {
 	session, _ := s.buildSession(user, "")
 
 	return session
 }
 
-func (s *AuthService) buildSession(user *model.User, token string) (*Session, error) {
-	session := &Session{
+func (s *AuthService) buildSession(user *model.User, token string) (*dto.Session, error) {
+	session := &dto.Session{
 		Token:       token,
 		User:        user,
 		Menus:       auth.Menus(user.Role),
@@ -182,7 +174,7 @@ func (s *AuthService) buildSession(user *model.User, token string) (*Session, er
 	return session, nil
 }
 
-func (s *AuthService) Refresh(raw string) (*Session, error) {
+func (s *AuthService) Refresh(raw string) (*dto.Session, error) {
 	claims, err := s.JWT.Parse(raw, true)
 	if err != nil {
 		return nil, resp.Unauthorized("登录状态已失效，请重新登录")

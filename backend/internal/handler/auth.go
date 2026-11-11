@@ -5,28 +5,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packsubmit/internal/dto"
 	"packsubmit/internal/middleware"
 	"packsubmit/internal/pkg/resp"
 )
 
-type loginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type passwordRequest struct {
-	OldPassword     string `json:"old_password"`
-	NewPassword     string `json:"new_password"`
-	ConfirmPassword string `json:"confirm_password"`
-}
-
 func (h *Handler) Login(c *gin.Context) {
-	var request loginRequest
-	if !bindJSON(c, &request) {
+	var input dto.LoginInput
+	if !bindJSON(c, &input) {
 		return
 	}
 
-	session, err := h.Auth.Login(request.Username, request.Password, c.ClientIP())
+	session, err := h.Auth.Login(input.Username, input.Password, c.ClientIP())
 	if err != nil {
 		resp.Error(c, err)
 		return
@@ -59,17 +49,17 @@ func (h *Handler) Me(c *gin.Context) {
 }
 
 func (h *Handler) ChangePassword(c *gin.Context) {
-	var request passwordRequest
-	if !bindJSON(c, &request) {
+	var input dto.PasswordInput
+	if !bindJSON(c, &input) {
 		return
 	}
 
-	if request.NewPassword != request.ConfirmPassword {
+	if input.NewPassword != input.ConfirmPassword {
 		resp.Fail(c, resp.CodeParam, "两次输入的新密码不一致")
 		return
 	}
 
-	token, err := h.Auth.ChangePassword(currentUser(c), request.OldPassword, request.NewPassword, c.ClientIP())
+	token, err := h.Auth.ChangePassword(currentUser(c), input.OldPassword, input.NewPassword, c.ClientIP())
 	if err != nil {
 		resp.Error(c, err)
 		return

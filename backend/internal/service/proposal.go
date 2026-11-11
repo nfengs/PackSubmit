@@ -16,41 +16,6 @@ import (
 	"packsubmit/internal/pkg/ulidx"
 )
 
-type ProposalView struct {
-	model.Proposal
-	StatusLabel  string          `json:"status_label"`
-	CreatorName  string          `json:"creator_name"`
-	ReviewerName string          `json:"reviewer_name"`
-	Permissions  map[string]bool `json:"permissions"`
-}
-
-type HistoryItem struct {
-	Action     string    `json:"action"`
-	ActionName string    `json:"action_name"`
-	Version    int       `json:"version"`
-	Content    string    `json:"content"`
-	UserName   string    `json:"user_name"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
-type ProposalDetail struct {
-	ProposalView
-	Attachments  []model.Attachment `json:"attachments"`
-	Logs         []HistoryItem      `json:"logs"`
-	History      []HistoryItem      `json:"history"`
-	Source       *ProposalView      `json:"source,omitempty"`
-	ActiveChange *ProposalView      `json:"active_change,omitempty"`
-}
-
-type Statistics struct {
-	Draft    int64 `json:"draft"`
-	Pending  int64 `json:"pending"`
-	Approved int64 `json:"approved"`
-	Archived int64 `json:"archived"`
-	Obsolete int64 `json:"obsolete"`
-	Total    int64 `json:"total"`
-}
-
 type ListFilter struct {
 	Page       int
 	PageSize   int
@@ -95,7 +60,7 @@ func (s *ProposalService) scope(q *gorm.DB, user *model.User) *gorm.DB {
 	}
 }
 
-func (s *ProposalService) List(user *model.User, filter ListFilter) ([]ProposalView, int64, error) {
+func (s *ProposalService) List(user *model.User, filter ListFilter) ([]dto.ProposalView, int64, error) {
 	page, size := filter.Page, filter.PageSize
 
 	if page < 1 {
@@ -162,8 +127,8 @@ func (s *ProposalService) List(user *model.User, filter ListFilter) ([]ProposalV
 	return s.enrich(rows, user), total, nil
 }
 
-func (s *ProposalService) Statistics(user *model.User) (*Statistics, error) {
-	stats := &Statistics{}
+func (s *ProposalService) Statistics(user *model.User) (*dto.Statistics, error) {
+	stats := &dto.Statistics{}
 
 	counts := []struct {
 		target *int64
@@ -203,7 +168,7 @@ func (s *ProposalService) Projects(user *model.User) ([]string, error) {
 	return rows, err
 }
 
-func (s *ProposalService) Get(user *model.User, id string) (*ProposalDetail, error) {
+func (s *ProposalService) Get(user *model.User, id string) (*dto.ProposalDetail, error) {
 	var proposal model.Proposal
 	if err := s.DB.First(&proposal, "id = ?", id).Error; err != nil {
 		return nil, resp.ErrNotFound
@@ -213,7 +178,7 @@ func (s *ProposalService) Get(user *model.User, id string) (*ProposalDetail, err
 		return nil, err
 	}
 
-	detail := &ProposalDetail{}
+	detail := &dto.ProposalDetail{}
 	detail.ProposalView = s.enrich([]model.Proposal{proposal}, user)[0]
 
 	if err := s.DB.Where("proposal_id = ?", proposal.ID).Order("created_at ASC").Find(&detail.Attachments).Error; err != nil {
@@ -232,8 +197,8 @@ func (s *ProposalService) Get(user *model.User, id string) (*ProposalDetail, err
 		return nil, err
 	}
 
-	detail.Logs = []HistoryItem{}
-	detail.History = []HistoryItem{}
+	detail.Logs = []dto.HistoryItem{}
+	detail.History = []dto.HistoryItem{}
 
 	userIDs := make(map[string]struct{})
 
@@ -244,7 +209,7 @@ func (s *ProposalService) Get(user *model.User, id string) (*ProposalDetail, err
 	names := s.userNames(userIDs)
 
 	for _, log := range logs {
-		item := HistoryItem{
+		item := dto.HistoryItem{
 			Action:     log.Action,
 			ActionName: log.ActionName,
 			Version:    log.Version,
@@ -282,8 +247,8 @@ func (s *ProposalService) Get(user *model.User, id string) (*ProposalDetail, err
 	return detail, nil
 }
 
-func (s *ProposalService) enrich(rows []model.Proposal, user *model.User) []ProposalView {
-	views := make([]ProposalView, 0, len(rows))
+func (s *ProposalService) enrich(rows []model.Proposal, user *model.User) []dto.ProposalView {
+	views := make([]dto.ProposalView, 0, len(rows))
 
 	ids := make(map[string]struct{})
 
@@ -299,7 +264,7 @@ func (s *ProposalService) enrich(rows []model.Proposal, user *model.User) []Prop
 
 	for i := range rows {
 		row := rows[i]
-		view := ProposalView{
+		view := dto.ProposalView{
 			Proposal:    row,
 			StatusLabel: row.StatusLabel(),
 			CreatorName: names[row.CreatedBy],
@@ -424,7 +389,7 @@ func (s *ProposalService) HasActiveChange(sourceID string) bool {
 // 字段派生与完整性校验
 // ------------------------------------------------------------------
 
-func (s *ProposalService) derive(input *dto.ProposalInput) error {
+func (s *ProposalService) derive(input *dto.ProposalFields) error {
 	for _, group := range []struct {
 		label  string
 		values [3]float64
@@ -660,12 +625,13 @@ func (s *ProposalService) assertPartUnique(tx *gorm.DB, supplierID, partNo, excl
 }
 
 // applyInput 以档案为准填充供应商 / 客户 / 零件快照，忽略前端伪造值
-func (s *ProposalService) applyInput(tx *gorm.DB, p *model.Proposal, input *dto.ProposalInput, user *model.User) error {
+// requestedSupplierID 仅管理员生效，供应商角色强制为账号所属供应商
+func (s *ProposalService) applyInput(tx *gorm.DB, p *model.Proposal, input *dto.ProposalFields, requestedSupplierID string, user *model.User) error {
 	supplierID := p.SupplierID
 
 	if user.Role == auth.RoleAdmin {
-		if input.SupplierID != "" {
-			supplierID = input.SupplierID
+		if requestedSupplierID != "" {
+			supplierID = requestedSupplierID
 		}
 	} else if user.SupplierID != nil {
 		supplierID = *user.SupplierID
@@ -751,12 +717,12 @@ func (s *ProposalService) applyInput(tx *gorm.DB, p *model.Proposal, input *dto.
 	return nil
 }
 
-func (s *ProposalService) Create(user *model.User, input *dto.ProposalInput, ip string) (*ProposalDetail, error) {
+func (s *ProposalService) Create(user *model.User, input *dto.ProposalCreateInput, ip string) (*dto.ProposalDetail, error) {
 	if user.Role != auth.RoleAdmin {
 		return nil, resp.Forbidden("仅管理员可以新增方案")
 	}
 
-	if err := s.derive(input); err != nil {
+	if err := s.derive(&input.ProposalFields); err != nil {
 		return nil, err
 	}
 
@@ -765,7 +731,7 @@ func (s *ProposalService) Create(user *model.User, input *dto.ProposalInput, ip 
 	err := s.DB.Transaction(func(tx *gorm.DB) error {
 		proposal := model.Proposal{ID: ulidx.New(), Version: 1, Status: model.StatusDraft, CreatedBy: user.ID}
 
-		if err := s.applyInput(tx, &proposal, input, user); err != nil {
+		if err := s.applyInput(tx, &proposal, &input.ProposalFields, input.SupplierID, user); err != nil {
 			return err
 		}
 
@@ -800,8 +766,8 @@ func (s *ProposalService) Create(user *model.User, input *dto.ProposalInput, ip 
 	return s.Get(user, created.ID)
 }
 
-func (s *ProposalService) Update(user *model.User, id string, input *dto.ProposalInput, ip string) (*ProposalDetail, error) {
-	if err := s.derive(input); err != nil {
+func (s *ProposalService) Update(user *model.User, id string, input *dto.ProposalUpdateInput, ip string) (*dto.ProposalDetail, error) {
+	if err := s.derive(&input.ProposalFields); err != nil {
 		return nil, err
 	}
 
@@ -817,7 +783,7 @@ func (s *ProposalService) Update(user *model.User, id string, input *dto.Proposa
 
 		originalPart := proposal.PartNo + "|" + proposal.SupplierID
 
-		if err := s.applyInput(tx, &proposal, input, user); err != nil {
+		if err := s.applyInput(tx, &proposal, &input.ProposalFields, input.SupplierID, user); err != nil {
 			return err
 		}
 
@@ -1062,7 +1028,7 @@ func (s *ProposalService) Archive(user *model.User, ids []string, ip string) (in
 }
 
 // Change 发起变更：复制源方案字段与附件，生成版本 +1 的独立草稿
-func (s *ProposalService) Change(user *model.User, id, ip string) (*ProposalDetail, error) {
+func (s *ProposalService) Change(user *model.User, id, ip string) (*dto.ProposalDetail, error) {
 	var newID string
 
 	err := s.DB.Transaction(func(tx *gorm.DB) error {

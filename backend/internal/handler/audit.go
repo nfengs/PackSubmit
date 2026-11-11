@@ -5,14 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"packsubmit/internal/dto"
 	"packsubmit/internal/model"
 	"packsubmit/internal/pkg/resp"
 )
-
-type auditLogView struct {
-	model.AuditLog
-	UserName string `json:"user_name"`
-}
 
 func (h *Handler) AuditLogs(c *gin.Context) {
 	page, size := pageParams(c)
@@ -83,10 +79,10 @@ func (h *Handler) AuditLogs(c *gin.Context) {
 		}
 	}
 
-	views := make([]auditLogView, 0, len(logs))
+	views := make([]dto.AuditLogView, 0, len(logs))
 
 	for _, log := range logs {
-		views = append(views, auditLogView{AuditLog: log, UserName: names[log.UserID]})
+		views = append(views, dto.AuditLogView{AuditLog: log, UserName: names[log.UserID]})
 	}
 
 	resp.OKPage(c, views, total, page, size)
