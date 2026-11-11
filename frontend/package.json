@@ -1,6 +1,6 @@
 {
   "name": "pack-submit-web",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "包装方案提交评审系统前端（Vue 3 + Element Plus，动态菜单 + 权限指令）",
   "type": "module",

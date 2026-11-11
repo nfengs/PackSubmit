@@ -102,6 +102,9 @@ npm run dev        # http://localhost:5273，/api 代理到 :8090
 npm run build      # 产物在 frontend/dist
 ```
 
+> 开发服务默认双栈监听（`host: '::'`），`localhost` 解析到 `::1` 或 `127.0.0.1` 都能访问；端口固定为 `5273`（`strictPort`，被占用时直接报错而不是漂移到 5274）。
+> 若运行环境未启用 IPv6，把 `vite.config.js` 的 `host` 改成 `'0.0.0.0'`，并统一使用 `http://127.0.0.1:5273` 访问。
+
 ### 3. 单二进制部署（可选）
 
 ```bash
