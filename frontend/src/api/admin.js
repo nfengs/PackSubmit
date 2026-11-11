@@ -48,9 +48,3 @@ export const importParts = (file) => upload('/admin/parts/import', file);
 export const previewPartBatch = (file) => upload('/admin/parts/batch-preview', file);
 export const updatePartBatch = (rows) => request.post('/admin/parts/batch-update', { rows });
 export const downloadPartTemplate = () => download('/admin/parts/template');
-
-// ---------------- 字典 ----------------
-export const getDictPage = (params) => request.get('/admin/dicts', { params });
-export const createDict = (data) => request.post('/admin/dicts', data);
-export const updateDict = (id, data) => request.put(`/admin/dicts/${id}`, data);
-export const deleteDict = (id) => request.delete(`/admin/dicts/${id}`);

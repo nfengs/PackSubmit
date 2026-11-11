@@ -54,16 +54,6 @@ func (h *Handler) Parts(c *gin.Context) {
 	resp.OK(c, items)
 }
 
-func (h *Handler) DictOptions(c *gin.Context) {
-	items, err := h.MasterData.DictOptions(c.Query("type"))
-	if err != nil {
-		resp.Error(c, err)
-		return
-	}
-
-	resp.OK(c, items)
-}
-
 func (h *Handler) ContactList(c *gin.Context) {
 	items, err := h.Contacts.List(currentUser(c), c.Query("supplier_id"))
 	if err != nil {

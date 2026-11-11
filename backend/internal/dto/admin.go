@@ -38,16 +38,6 @@ type SupplierInput struct {
 	Status  *int8  `json:"status" binding:"omitempty,oneof=0 1"`
 }
 
-// DictInput 字典入参
-type DictInput struct {
-	DictType  string `json:"dict_type" binding:"required,max=50"`
-	DictLabel string `json:"dict_label" binding:"required,max=100"`
-	DictValue string `json:"dict_value" binding:"required,max=100"`
-	Sort      int    `json:"sort"`
-	Status    *int8  `json:"status" binding:"omitempty,oneof=0 1"`
-	Remark    string `json:"remark" binding:"max=255"`
-}
-
 // PartInput 零件号行内编辑（供应商与零件号只读）
 type PartInput struct {
 	ProjectName string `json:"project_name" binding:"max=150"`

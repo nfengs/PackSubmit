@@ -15,7 +15,3 @@ export function getMySupplier() {
 export function getParts(params) {
   return request.get('/master/parts', { params });
 }
-
-export function getDictOptions(params) {
-  return request.get('/dicts/options', { params });
-}

@@ -93,18 +93,6 @@ type legacyPart struct {
 	UpdateTime   *time.Time `gorm:"column:update_time"`
 }
 
-type legacyDict struct {
-	ID         int64      `gorm:"column:id"`
-	DictType   string     `gorm:"column:dict_type"`
-	DictLabel  string     `gorm:"column:dict_label"`
-	DictValue  string     `gorm:"column:dict_value"`
-	Sort       int        `gorm:"column:sort"`
-	Status     int8       `gorm:"column:status"`
-	Remark     string     `gorm:"column:remark"`
-	CreateTime *time.Time `gorm:"column:create_time"`
-	UpdateTime *time.Time `gorm:"column:update_time"`
-}
-
 type legacyProposal struct {
 	ID               int64      `gorm:"column:id"`
 	ProposalNo       string     `gorm:"column:proposal_no"`
@@ -279,7 +267,6 @@ func main() {
 		{"供应商", m.migrateSuppliers},
 		{"供应商联系人", m.migrateContacts},
 		{"零件号", m.migrateParts},
-		{"字典", m.migrateDicts},
 		{"方案", m.migrateProposals},
 		{"方案变更来源", m.fixProposalSources},
 		{"附件", m.migrateAttachments},
@@ -296,7 +283,7 @@ func main() {
 
 	log.Println("---------------- 迁移汇总 ----------------")
 
-	for _, key := range []string{"用户", "客户", "供应商", "联系人", "零件号", "字典", "方案", "附件", "审计日志", "主数据日志", "零件号日志"} {
+	for _, key := range []string{"用户", "客户", "供应商", "联系人", "零件号", "方案", "附件", "审计日志", "主数据日志", "零件号日志"} {
 		log.Printf("%-10s %d 条", key, m.stats[key])
 	}
 
@@ -550,40 +537,6 @@ func (m *migrator) migrateParts() error {
 
 		m.partMap[row.ID] = part.ID
 		m.stats["零件号"]++
-	}
-
-	return nil
-}
-
-func (m *migrator) migrateDicts() error {
-	var rows []legacyDict
-	if ok, err := m.load("dict", &rows); !ok || err != nil {
-		return err
-	}
-
-	for _, row := range rows {
-		dict := model.Dict{
-			ID:        ulidx.New(),
-			DictType:  row.DictType,
-			DictLabel: row.DictLabel,
-			DictValue: row.DictValue,
-			Sort:      row.Sort,
-			Status:    row.Status,
-			Remark:    row.Remark,
-			CreatedAt: timeOrNow(row.CreateTime),
-			UpdatedAt: timeOrNow(row.UpdateTime),
-		}
-
-		if *dryRun {
-			m.stats["字典"]++
-			continue
-		}
-
-		if err := m.db.Create(&dict).Error; err != nil {
-			return err
-		}
-
-		m.stats["字典"]++
 	}
 
 	return nil

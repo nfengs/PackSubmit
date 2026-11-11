@@ -110,7 +110,6 @@ func Routes(role int8) []Menu {
 			Menu{Path: "/system/customers", Name: "SystemCustomers", Title: "客户管理", Component: "admin/customer", Permission: PermMasterManage},
 			Menu{Path: "/system/suppliers", Name: "SystemSuppliers", Title: "供应商管理", Component: "admin/supplier", Permission: PermMasterManage},
 			Menu{Path: "/system/parts", Name: "SystemParts", Title: "零件号管理", Component: "admin/part", Permission: PermMasterManage},
-			Menu{Path: "/system/dicts", Name: "SystemDicts", Title: "字典管理", Component: "admin/dict", Permission: PermMasterManage},
 		)
 	}
 
@@ -165,7 +164,6 @@ func Menus(role int8) []Menu {
 				Menu{Path: "/system/customers", Name: "SystemCustomers", Title: "客户管理", Icon: "OfficeBuilding"},
 				Menu{Path: "/system/suppliers", Name: "SystemSuppliers", Title: "供应商管理", Icon: "Shop"},
 				Menu{Path: "/system/parts", Name: "SystemParts", Title: "零件号管理", Icon: "Box"},
-				Menu{Path: "/system/dicts", Name: "SystemDicts", Title: "字典管理", Icon: "Collection"},
 			)
 		}
 

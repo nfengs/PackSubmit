@@ -83,22 +83,6 @@ CREATE TABLE IF NOT EXISTS `supplier_parts` (
   KEY `idx_parts_deleted` (`deleted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='供应商指定零件号';
 
-CREATE TABLE IF NOT EXISTS `dicts` (
-  `id`         char(26)     NOT NULL,
-  `dict_type`  varchar(50)  NOT NULL DEFAULT '',
-  `dict_label` varchar(100) NOT NULL DEFAULT '',
-  `dict_value` varchar(100) NOT NULL DEFAULT '',
-  `sort`       int          NOT NULL DEFAULT 0,
-  `status`     tinyint      NOT NULL DEFAULT 1,
-  `remark`     varchar(255) NOT NULL DEFAULT '',
-  `created_at` datetime(3)  DEFAULT NULL,
-  `updated_at` datetime(3)  DEFAULT NULL,
-  `deleted_at` datetime(3)  DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_dict_type_value` (`dict_type`, `dict_value`),
-  KEY `idx_dicts_deleted` (`deleted_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='数据字典';
-
 CREATE TABLE IF NOT EXISTS `proposals` (
   `id`                  char(26)     NOT NULL,
   `proposal_no`         varchar(32)  NOT NULL COMMENT 'PS+YYYYMMDD+4位流水',

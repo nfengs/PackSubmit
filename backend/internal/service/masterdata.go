@@ -75,20 +75,6 @@ func (s *MasterDataService) Parts(user *model.User, supplierID, keyword string) 
 	return items, err
 }
 
-func (s *MasterDataService) DictOptions(dictType string) ([]model.Dict, error) {
-	items := make([]model.Dict, 0)
-
-	q := s.DB.Where("status = ?", 1)
-
-	if dictType = strings.TrimSpace(dictType); dictType != "" {
-		q = q.Where("dict_type = ?", dictType)
-	}
-
-	err := q.Order("dict_type ASC, sort ASC, id ASC").Limit(1000).Find(&items).Error
-
-	return items, err
-}
-
 func (s *MasterDataService) SupplierByID(id string) (*model.Supplier, error) {
 	var supplier model.Supplier
 

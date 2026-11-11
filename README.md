@@ -44,7 +44,7 @@ backend/
 ├── internal/
 │   ├── config/                    # YAML + 环境变量
 │   ├── database/                  # 连接、迁移执行、演示数据
-│   ├── model/                     # GORM 模型（11 张表）
+│   ├── model/                     # GORM 模型（10 张表）
 │   ├── dto/                       # 请求结构
 │   ├── service/                   # 业务：方案状态机 / 附件 / 导出 / 审计 / 认证 / 主数据
 │   ├── handler/                   # 参数绑定与响应
@@ -229,7 +229,6 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 | `supplier_parts` | 指定零件号清单（受控建单来源） | `(supplier_id, part_no)` 唯一 |
 | `proposals` | 包装方案主表 | `proposal_no` 唯一；`status`、`supplier_id`、`source_proposal_id` 索引 |
 | `attachments` | 附件 | `proposal_id` 为空表示暂存；`md5`、`file_path` 索引 |
-| `dicts` | 字典 | `(dict_type, dict_value)` 唯一 |
 | `audit_logs` | 全局审计 + 方案流程日志 | `proposal_id`、`action`、`created_at` 索引 |
 | `master_logs` | 客户/供应商/用户维护日志 | `(biz_type, target_id)` |
 | `part_logs` | 零件号维护日志 | `(supplier_id, part_no)` |
@@ -255,7 +254,6 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 | POST | `/auth/logout` | 退出（token 拉黑） |
 | GET | `/auth/me` | 当前用户 + 菜单/路由/权限 |
 | PUT | `/auth/password` | 改密（递增 token_version，返回新 token） |
-| GET | `/dicts/options` | 字典选项 |
 | GET | `/master/customers` `/suppliers` `/my-supplier` `/parts` | 主数据读取 |
 | GET/POST/PUT/DELETE | `/supplier-contacts` | 联系人维护（供应商限本家，管理员可代维护） |
 | GET | `/proposals` | 方案列表（按角色限定数据范围） |
@@ -290,7 +288,6 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 | GET/POST | `/admin/parts`、`/admin/parts/template`、`/admin/parts/import` | 零件号列表 / 模板 / 导入（自动生成草稿） |
 | POST | `/admin/parts/batch-preview`、`/admin/parts/batch-update` | 批量修改预览 / 二次确认提交 |
 | PUT/DELETE | `/admin/parts/{id}`、`GET /admin/parts/{id}/logs` | 行内修改 / 删除 / 维护日志 |
-| GET/POST/PUT/DELETE | `/admin/dicts`、`/admin/dicts/{id}` | 字典维护 |
 | GET | `/admin/proposals/detail` | 全量详细方案（52 字段明细，单页上限 500，支持多条件筛选） |
 | POST | `/admin/proposals/archive` | 批量归档（变更归档时自动作废原方案） |
 | GET | `/admin/audit-logs` | 全局审计日志 |
@@ -333,7 +330,7 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 - 请求一律走 `internal/dto` 的 Input 结构，**不直接绑定 GORM 模型**：模型的 `status / version / proposal_no / created_by / source_proposal_id` 等字段绝不由前端决定，`spec / quantity / pallet_parts_qty / write_date` 干脆不在 Input 中定义。
 - `ProposalCreateInput`（供应商必填）与 `ProposalUpdateInput`（整表单覆盖）分开，`ProposalFields` 承载公共可编辑字段。
 - 入参用 `binding` tag 声明必填、长度、枚举、范围；`bindJSON` 统一转成 `1001` + 中文文案（校验器已注册 JSON 字段名，如「缺少必填项：供应商」）。
-- 响应只在**结构与表不一致**时才建 View（`ProposalView / ProposalDetail / Statistics / ContactView / AuditLogView`）；客户、供应商、字典等直接输出模型，不做无意义的套壳。
+- 响应只在**结构与表不一致**时才建 View（`ProposalView / ProposalDetail / Statistics / ContactView / AuditLogView`）；客户、供应商等直接输出模型，不做无意义的套壳。
 - 业务校验（提交完整性、以档案为准覆盖快照、派生字段计算）必须留在 service，DTO 只负责形状与格式。
 
 **8. 受控建单与主数据同步**
@@ -398,7 +395,6 @@ PS_DB_PASSWORD=*** go run ./cmd/migrate-legacy -config configs/config.yaml
 | `pf_customer` / `pf_supplier` | `customers` / `suppliers` | 保留软删记录与时间 |
 | `pf_supplier_contact` | `supplier_contacts` | 按旧供应商 ID 映射 |
 | `pf_supplier_part` | `supplier_parts` | `supplier_name` → `supplier_id` |
-| `pf_dict` | `dicts` | 原样迁移 |
 | `pf_pack_proposal` | `proposals` | 映射创建人/评审人/客户/供应商；`source_proposal_id` 二次回填 |
 | `pf_attachment` | `attachments` | 复制物理文件到新目录并重命名，缺失文件跳过 |
 | `pf_review_log` | `audit_logs` | 保留动作、状态、版本、IP |
@@ -412,7 +408,7 @@ PS_DB_PASSWORD=*** go run ./cmd/migrate-legacy -config configs/config.yaml
 
 已完成（第一阶段）：工程骨架、配置与迁移、登录/刷新/改密/限流、动态菜单与权限、方案列表/详情/编辑/提交/撤回/评审/归档/变更/删除、四类图片与附件、Excel 导出、审计日志、供应商联系人、工作台与全量方案列表。
 
-已完成（第二阶段）：主数据管理（用户 / 客户 / 供应商 / 零件号 / 字典的增删改、Excel 导入、名称查重、页面内维护日志）、受控建单链路（导入零件号后自动生成方案草稿）、零件号批量修改（预览 + 二次确认）与方案名称同步、行内编辑与零件号维护日志。
+已完成（第二阶段）：主数据管理（用户 / 客户 / 供应商 / 零件号的增删改、Excel 导入、名称查重、页面内维护日志）、受控建单链路（导入零件号后自动生成方案草稿）、零件号批量修改（预览 + 二次确认）与方案名称同步、行内编辑与零件号维护日志。
 
 已完成（第三阶段）：
 

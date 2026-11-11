@@ -41,7 +41,6 @@ func New(h *handler.Handler, manager *auth.Manager, db *gorm.DB, cfg *config.Con
 		authorized.GET("/auth/me", h.Me)
 		authorized.PUT("/auth/password", h.ChangePassword)
 
-		authorized.GET("/dicts/options", h.DictOptions)
 		authorized.GET("/master/customers", h.Customers)
 		authorized.GET("/master/suppliers", h.Suppliers)
 		authorized.GET("/master/my-supplier", h.MySupplier)
@@ -139,14 +138,6 @@ func New(h *handler.Handler, manager *auth.Manager, db *gorm.DB, cfg *config.Con
 				parts.GET("/:id/logs", h.AdminPartLogs)
 			}
 
-			dicts := admin.Group("/dicts")
-			dicts.Use(middleware.RequirePermission(auth.PermMasterManage))
-			{
-				dicts.GET("", h.AdminDicts)
-				dicts.POST("", h.AdminDictCreate)
-				dicts.PUT("/:id", h.AdminDictUpdate)
-				dicts.DELETE("/:id", h.AdminDictDelete)
-			}
 		}
 	}
 

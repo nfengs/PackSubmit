@@ -129,21 +129,6 @@ type SupplierPart struct {
 
 func (SupplierPart) TableName() string { return "supplier_parts" }
 
-type Dict struct {
-	ID        string         `gorm:"primaryKey;size:26" json:"id"`
-	DictType  string         `gorm:"size:50;uniqueIndex:uk_dict_type_value;not null" json:"dict_type"`
-	DictLabel string         `gorm:"size:100;not null" json:"dict_label"`
-	DictValue string         `gorm:"size:100;uniqueIndex:uk_dict_type_value;not null" json:"dict_value"`
-	Sort      int            `gorm:"default:0" json:"sort"`
-	Status    int8           `gorm:"default:1" json:"status"`
-	Remark    string         `gorm:"size:255" json:"remark"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
-func (Dict) TableName() string { return "dicts" }
-
 // Proposal 包装方案（一条记录 = 一个供应商 + 零件号的某一版本）
 type Proposal struct {
 	ID               string  `gorm:"primaryKey;size:26" json:"id"`
