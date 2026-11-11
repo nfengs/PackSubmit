@@ -2,11 +2,12 @@
 import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Lock, SwitchButton } from '@element-plus/icons-vue';
+import { Brush, Lock, SwitchButton } from '@element-plus/icons-vue';
 
 import { changePassword } from '@/api/auth';
 import { useUserStore } from '@/store/user';
 import { resetDynamicRoutes } from '@/router/permission';
+import { clearAppCache } from '@/utils/cache';
 import { ROLE_TEXT } from '@/utils/constants';
 import versionInfo from '@/version.json';
 
@@ -56,6 +57,19 @@ async function submitPassword() {
 async function handleCommand(command) {
   if (command === 'password') {
     openPassword();
+    return;
+  }
+
+  if (command === 'clearcache') {
+    await ElMessageBox.confirm(
+      '将清除列设置、列宽等本地配置与浏览器缓存，登录状态保留，清理后页面会自动刷新。',
+      '清理缓存',
+      { type: 'warning' },
+    );
+
+    const removed = await clearAppCache();
+    ElMessage.success(`已清理 ${removed.length} 项本地配置`);
+    setTimeout(() => window.location.reload(), 600);
     return;
   }
 
@@ -117,6 +131,7 @@ async function handleCommand(command) {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="password" :icon="Lock">修改密码</el-dropdown-item>
+              <el-dropdown-item command="clearcache" :icon="Brush">清理缓存</el-dropdown-item>
               <el-dropdown-item command="logout" :icon="SwitchButton" divided>退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>

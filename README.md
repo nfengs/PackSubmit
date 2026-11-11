@@ -418,12 +418,13 @@ PS_DB_PASSWORD=*** go run ./cmd/migrate-legacy -config configs/config.yaml
 
 1. 「全量详细方案」：52 字段明细、多条件筛选、列设置（本地持久化）、全字段 xlsx 导出。
 2. 旧库迁移工具 `cmd/migrate-legacy`：ULID 映射、供应商/客户/用户关联转换、附件复制、日志迁移，支持 `-dry-run`。
+3. 报表列宽拖拽与本地持久化、导出分页进度提示；侧边栏用户菜单新增「清理缓存」。
 
 待补（第四阶段）：
 
 1. PDF 导出（旧实现为 Dompdf，新方案建议 xlsx → PDF，待定）。
-2. 列表列宽拖拽与持久化、导出进度提示等体验增强。
-3. 多实例部署所需的共享缓存（登录限流 / token 黑名单）。
+2. 多实例部署所需的共享缓存（登录限流 / token 黑名单）。
+3. 导出任务异步化（超大数据量时改为后台任务 + 下载中心）。
 
 已知限制：
 
@@ -432,6 +433,7 @@ PS_DB_PASSWORD=*** go run ./cmd/migrate-legacy -config configs/config.yaml
 - 单实例部署；导出为内存生成，超大并发下建议加限流。
 - 客户 / 供应商 / 零件号采用「唯一索引 + 软删」：删除时改名（`原名称#ID`）释放唯一键，可重新创建同名记录；历史方案保留快照，不受主数据删除影响。
 - 用户不支持删除，只支持禁用；禁用后已登录会话在下一次请求即失效。
+- 前端本地配置（报表列设置 `packsubmit_report_columns_v1`、列宽 `packsubmit_report_widths_v1`）只存在浏览器；用户菜单「清理缓存」会清空所有 `packsubmit_` 前缀的本地配置与 sessionStorage / CacheStorage，**保留登录 token**，清理后自动刷新页面。
 
 ---
 

@@ -83,6 +83,7 @@ const DEFAULT_KEYS = [
 ];
 
 const STORAGE_KEY = 'packsubmit_report_columns_v1';
+const WIDTH_KEY = 'packsubmit_report_widths_v1';
 const ALL_KEYS = COLUMNS.map((item) => item.key);
 
 function loadVisibleKeys() {
@@ -100,10 +101,31 @@ function loadVisibleKeys() {
   return [...DEFAULT_KEYS];
 }
 
+function loadWidths() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WIDTH_KEY) || '{}');
+    const widths = {};
+
+    COLUMNS.forEach((column) => {
+      const value = Number(saved[column.key]);
+      if (Number.isFinite(value) && value >= 60) widths[column.key] = Math.round(value);
+    });
+
+    return widths;
+  } catch (e) {
+    return {};
+  }
+}
+
 const loading = ref(false);
 const exporting = ref(false);
 const rows = ref([]);
 const total = ref(0);
+const widths = ref(loadWidths());
+const exportVisible = ref(false);
+const exportProgress = ref(0);
+const exportLoaded = ref(0);
+const exportTotal = ref(0);
 const visibleKeys = ref(loadVisibleKeys());
 const columnsVisible = ref(false);
 const draftKeys = ref([...visibleKeys.value]);
@@ -233,23 +255,54 @@ function resetColumns() {
   draftKeys.value = [...DEFAULT_KEYS];
 }
 
+// 表头拖拽调整列宽后立即持久化
+function onHeaderDragend(newWidth, oldWidth, column) {
+  const key = column?.property;
+  if (!key) return;
+
+  const next = { ...widths.value, [key]: Math.round(newWidth) };
+  widths.value = next;
+  localStorage.setItem(WIDTH_KEY, JSON.stringify(next));
+}
+
+function resetWidths() {
+  widths.value = {};
+  localStorage.removeItem(WIDTH_KEY);
+  ElMessage.success('已恢复默认列宽');
+}
+
 async function exportExcel() {
   exporting.value = true;
+  exportVisible.value = true;
+  exportProgress.value = 0;
+  exportLoaded.value = 0;
+  exportTotal.value = 0;
 
   try {
-    const all = [];
-    let page = 1;
+    // 先取第一页拿到总数，再逐页拉取，用于展示进度
+    const first = await getProposalReport(buildParams({ page: 1, page_size: 500 }));
+    const all = [...(first.list || [])];
+    exportTotal.value = first.total || all.length;
+    exportLoaded.value = all.length;
+    exportProgress.value = exportTotal.value
+      ? Math.min(99, Math.round((all.length / exportTotal.value) * 100))
+      : 99;
 
-    while (true) {
+    let page = 2;
+    while (all.length < exportTotal.value) {
       const data = await getProposalReport(buildParams({ page, page_size: 500 }));
       const list = data.list || [];
-      all.push(...list);
 
-      if (!list.length || all.length >= (data.total || 0)) break;
+      if (!list.length) break;
+
+      all.push(...list);
+      exportLoaded.value = all.length;
+      exportProgress.value = Math.min(100, Math.round((all.length / exportTotal.value) * 100));
       page += 1;
     }
 
     if (!all.length) {
+      exportVisible.value = false;
       ElMessage.warning('当前筛选条件下没有数据');
       return;
     }
@@ -258,7 +311,9 @@ async function exportExcel() {
     const body = all.map((row) => COLUMNS.map((column) => cellText(column, row)));
     const sheet = XLSX.utils.aoa_to_sheet([header, ...body]);
 
-    sheet['!cols'] = COLUMNS.map((column) => ({ wch: Math.min(40, Math.max(10, Math.round((column.width || 120) / 7))) }));
+    sheet['!cols'] = COLUMNS.map((column) => ({
+      wch: Math.min(40, Math.max(10, Math.round((widths.value[column.key] || column.width || 120) / 7))),
+    }));
 
     const book = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(book, sheet, '全量详细方案');
@@ -266,6 +321,12 @@ async function exportExcel() {
     const today = new Date();
     const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     XLSX.writeFile(book, `全量详细方案_${stamp}.xlsx`);
+
+    exportProgress.value = 100;
+    ElMessage.success(`已导出 ${all.length} 条`);
+    setTimeout(() => {
+      exportVisible.value = false;
+    }, 400);
   } finally {
     exporting.value = false;
   }
@@ -313,9 +374,10 @@ async function exportExcel() {
     <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
       title="明细只读，共 52 个字段；导出按当前筛选条件拉取全部数据，不受「列设置」影响。" />
 
-    <el-table :data="rows" v-loading="loading" size="small" border style="width: 100%">
-      <el-table-column v-for="column in visibleColumns" :key="column.key" :label="column.label"
-        :width="column.width" show-overflow-tooltip>
+    <el-table :data="rows" v-loading="loading" size="small" border style="width: 100%"
+      @header-dragend="onHeaderDragend">
+      <el-table-column v-for="column in visibleColumns" :key="column.key" :prop="column.key"
+        :label="column.label" :width="widths[column.key] || column.width" show-overflow-tooltip>
         <template #default="{ row }">{{ cellText(column, row) }}</template>
       </el-table-column>
       <template #empty>
@@ -333,6 +395,7 @@ async function exportExcel() {
       <div style="margin-bottom: 10px; display: flex; gap: 8px">
         <el-button size="small" @click="draftKeys = [...ALL_KEYS]">全选</el-button>
         <el-button size="small" @click="draftKeys = [...DEFAULT_KEYS]">恢复默认</el-button>
+        <el-button size="small" @click="resetWidths">恢复默认列宽</el-button>
         <el-button size="small" @click="draftKeys = []">清空</el-button>
         <span class="muted" style="font-size: 12px; align-self: center">
           已选 {{ draftKeys.length }} / {{ ALL_KEYS.length }} 列（配置保存在本机浏览器）
@@ -350,6 +413,14 @@ async function exportExcel() {
         <el-button @click="columnsVisible = false">取消</el-button>
         <el-button type="primary" @click="applyColumns">应用</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="exportVisible" title="正在导出" width="440px" :close-on-click-modal="false"
+      :close-on-press-escape="false" :show-close="false">
+      <el-progress :percentage="exportProgress" :stroke-width="14" striped striped-flow />
+      <div class="muted" style="margin-top: 12px; font-size: 13px">
+        已加载 {{ exportLoaded }} / {{ exportTotal }} 条，请勿关闭页面
+      </div>
     </el-dialog>
   </div>
 </template>
