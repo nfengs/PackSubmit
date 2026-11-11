@@ -54,8 +54,20 @@ export function setupRouterGuard(router) {
           dynamicNames.push(route.name);
         });
 
+        // 动态路由就绪后再挂兜底路由，避免未注册的 /dashboard 被兜底重定向反复解析
+        if (!router.hasRoute('NotFound')) {
+          router.addRoute({
+            path: '/:pathMatch(.*)*',
+            name: 'NotFound',
+            component: () => import('@/views/error/404.vue'),
+            meta: { title: '页面不存在' },
+          });
+          dynamicNames.push('NotFound');
+        }
+
         routesReady = true;
-        return { ...to, replace: true };
+        // 用显式 path 重新解析，避免沿用兜底路由的 name 跳过刚注册的动态路由
+        return { path: to.path, query: to.query, hash: to.hash, replace: true };
       } catch (e) {
         userStore.clear();
         return { path: '/login' };

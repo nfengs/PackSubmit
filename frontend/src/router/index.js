@@ -19,12 +19,8 @@ const constantRoutes = [
     component: () => import('@/views/error/403.vue'),
     meta: { title: '无权限' },
   },
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'NotFound',
-    redirect: '/dashboard',
-    meta: { public: true },
-  },
+  // 兜底路由不在此注册：动态路由就绪后再挂载，避免 /dashboard 未注册时
+  // 兜底重定向与目标路由互相递归（RangeError: Maximum call stack size exceeded）
 ];
 
 const router = createRouter({
