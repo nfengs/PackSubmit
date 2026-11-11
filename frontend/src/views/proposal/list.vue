@@ -17,7 +17,7 @@ import { saveBlob } from '@/api/attachment';
 import { getCustomers, getSuppliers } from '@/api/masterdata';
 import ReviewDialog from './ReviewDialog.vue';
 import { formatDateTime } from '@/utils/format';
-import { STATUS_OPTIONS, STATUS_TAG, STATUS_TEXT } from '@/utils/constants';
+import { ROLE, STATUS_OPTIONS, STATUS_TAG, STATUS_TEXT } from '@/utils/constants';
 import { useUserStore } from '@/store/user';
 
 const route = useRoute();
@@ -37,15 +37,19 @@ const suppliers = ref([]);
 const query = reactive({
   page: 1,
   page_size: 20,
-  status: '',
   keyword: '',
+  part_no: '',
   customer: '',
   supplier: '',
   project: '',
-  part_no: '',
+  status: [],
+  with_pallet: '',
+  date_field: 'created_at',
   start_date: '',
   end_date: '',
 });
+
+const canFilterSupplier = computed(() => userStore.user?.role !== ROLE.SUPPLIER);
 
 const dateRange = ref([]);
 
@@ -56,11 +60,21 @@ async function load() {
   loading.value = true;
 
   try {
-    const params = { ...query };
-    if (!params.status) delete params.status;
-    if (!params.customer) delete params.customer;
-    if (!params.supplier) delete params.supplier;
-    if (!params.project) delete params.project;
+    const params = {
+      page: query.page,
+      page_size: query.page_size,
+      date_field: query.date_field,
+    };
+
+    if (query.keyword) params.keyword = query.keyword;
+    if (query.part_no) params.part_no = query.part_no;
+    if (query.customer) params.customer = query.customer;
+    if (query.supplier) params.supplier = query.supplier;
+    if (query.project) params.project = query.project;
+    if (query.status.length) params.status = query.status.join(',');
+    if (query.with_pallet !== '') params.with_pallet = query.with_pallet;
+    if (query.start_date) params.start_date = query.start_date;
+    if (query.end_date) params.end_date = query.end_date;
 
     const data = await getProposals(params);
     rows.value = data.list || [];
@@ -76,7 +90,7 @@ async function loadOptions() {
     projects.value = projectList || [];
     customers.value = customerList || [];
 
-    if (userStore.isAdmin) {
+    if (canFilterSupplier.value) {
       suppliers.value = (await getSuppliers()) || [];
     }
   } catch (e) {
@@ -92,12 +106,14 @@ function search() {
 function reset() {
   Object.assign(query, {
     page: 1,
-    status: '',
     keyword: '',
+    part_no: '',
     customer: '',
     supplier: '',
     project: '',
-    part_no: '',
+    status: [],
+    with_pallet: '',
+    date_field: 'created_at',
     start_date: '',
     end_date: '',
   });
@@ -113,8 +129,10 @@ watch(dateRange, (value) => {
 watch(
   () => route.query.status,
   (value) => {
-    if (value !== undefined && value !== query.status) {
-      query.status = String(value);
+    const next = value === undefined || value === '' ? [] : String(value).split(',').filter(Boolean);
+
+    if (next.join(',') !== query.status.join(',')) {
+      query.status = next;
       query.page = 1;
       load();
     }
@@ -187,7 +205,10 @@ function onSelectionChange(rows) {
 }
 
 onMounted(() => {
-  if (route.query.status !== undefined) query.status = String(route.query.status);
+  if (route.query.status !== undefined && route.query.status !== '') {
+    query.status = String(route.query.status).split(',').filter(Boolean);
+  }
+
   loadOptions();
   load();
 });
@@ -198,17 +219,30 @@ onMounted(() => {
     <div class="page-toolbar">
       <el-input v-model="query.keyword" placeholder="方案编号 / 零件名称 / 零件号" clearable style="width: 240px"
         @keyup.enter="search" />
-      <el-select v-model="query.status" placeholder="状态" clearable style="width: 140px">
-        <el-option v-for="item in STATUS_OPTIONS" :key="item.value" :label="item.label" :value="String(item.value)" />
-      </el-select>
+      <el-input v-model="query.part_no" placeholder="零件号（模糊）" clearable style="width: 160px"
+        @keyup.enter="search" />
       <el-select v-model="query.customer" placeholder="客户" clearable filterable style="width: 150px">
         <el-option v-for="item in customers" :key="item.id" :label="item.name" :value="item.name" />
+      </el-select>
+      <el-select v-if="canFilterSupplier" v-model="query.supplier" placeholder="供应商" clearable filterable
+        style="width: 170px">
+        <el-option v-for="item in suppliers" :key="item.id" :label="item.name" :value="item.name" />
       </el-select>
       <el-select v-model="query.project" placeholder="项目车型" clearable filterable style="width: 170px">
         <el-option v-for="item in projects" :key="item" :label="item" :value="item" />
       </el-select>
-      <el-select v-if="isAllMode" v-model="query.supplier" placeholder="供应商" clearable filterable style="width: 160px">
-        <el-option v-for="item in suppliers" :key="item.id" :label="item.name" :value="item.name" />
+      <el-select v-model="query.status" placeholder="状态（多选）" multiple collapse-tags clearable style="width: 200px">
+        <el-option v-for="item in STATUS_OPTIONS" :key="item.value" :label="item.label" :value="String(item.value)" />
+      </el-select>
+      <el-select v-model="query.with_pallet" placeholder="是否带托盘" clearable style="width: 140px">
+        <el-option label="是" value="1" />
+        <el-option label="否" value="0" />
+      </el-select>
+      <el-select v-model="query.date_field" style="width: 130px">
+        <el-option label="创建时间" value="created_at" />
+        <el-option label="提交时间" value="submit_time" />
+        <el-option label="评审时间" value="review_time" />
+        <el-option label="归档时间" value="archive_time" />
       </el-select>
       <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始日期"
         end-placeholder="结束日期" style="width: 240px" />
