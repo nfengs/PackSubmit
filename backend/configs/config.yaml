@@ -1,5 +1,5 @@
 server:
-  addr: ":8080"
+  addr: ":8090"
   mode: debug            # debug / release
   static_dir: ""         # 单二进制部署时指向前端构建产物，例如 ../frontend/dist
 

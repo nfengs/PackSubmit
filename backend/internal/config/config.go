@@ -66,7 +66,7 @@ type Config struct {
 
 func defaults() *Config {
 	return &Config{
-		Server: serverConfig{Addr: ":8080", Mode: "debug", StaticDir: ""},
+		Server: serverConfig{Addr: ":8090", Mode: "debug", StaticDir: ""},
 		DB: dbConfig{
 			Host: "127.0.0.1", Port: 3306, User: "root", Password: "",
 			Name: "pack_submit", Params: "charset=utf8mb4&parseTime=True&loc=Local",

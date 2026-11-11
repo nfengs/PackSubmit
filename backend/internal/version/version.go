@@ -3,6 +3,6 @@ package version
 
 // 后端版本号与发布时间（北京时间）
 var (
-	Version    = "1.0.3"
-	ReleasedAt = "2026-11-11 15:08:48"
+	Version    = "1.0.4"
+	ReleasedAt = "2026-11-11 15:09:53"
 )

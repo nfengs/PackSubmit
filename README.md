@@ -64,7 +64,7 @@ frontend/
 │   ├── router/{index,permission}.js
 │   ├── store/user.js              # token / user / menus / routes / permissions
 │   └── views/{login,dashboard,proposal,contacts,audit,error}
-└── vite.config.js                 # /api 代理到 127.0.0.1:8080
+└── vite.config.js                 # /api 代理到 127.0.0.1:8090
 ```
 
 ---
@@ -86,7 +86,7 @@ go mod tidy
 # 建库 + 执行迁移 + 初始化演示数据（空库才生效）
 go run ./cmd/server -config configs/config.yaml -migrate -seed
 
-# 启动（默认 :8080）
+# 启动（默认 :8090）
 go run ./cmd/server -config configs/config.yaml
 ```
 
@@ -98,7 +98,7 @@ go run ./cmd/server -config configs/config.yaml
 ```bash
 cd frontend
 npm install
-npm run dev        # http://localhost:5173，/api 代理到 :8080
+npm run dev        # http://localhost:5273，/api 代理到 :8090
 npm run build      # 产物在 frontend/dist
 ```
 
@@ -112,6 +112,37 @@ PS_SERVER_STATIC_DIR=../frontend/dist PS_SERVER_MODE=release ./bin/packsubmit -c
 ```
 
 后端会自动托管 `static_dir` 下的前端产物（非 `/api` 的 GET 回退到 `index.html`）。
+
+### 4. 同域部署（前端与后端绑定同一域名）
+
+前端与接口必须同源：页面走 `/`，接口走 `/api/v1`。两种做法任选其一：
+
+- **后端托管（最简）**：`npm run build` 后设置 `PS_SERVER_STATIC_DIR=../frontend/dist`，由 Go 进程同时提供页面与接口，只需暴露一个端口（默认 `8090`）。
+- **Nginx / Apache 反代**：静态资源交给 Web 服务器，`/api/` 转发到后端：
+
+```nginx
+server {
+    listen 80;
+    server_name packsubmit.example.com;
+
+    root /srv/packsubmit/frontend/dist;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8090;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+> 开发环境把域名指到 Vite（`5273`）时，反向代理需透传 `Upgrade` / `Connection` 头，否则 HMR WebSocket 无法连接；接口仍由 Vite 代理转发到后端 `8090`。
+> 跨域部署（前后端不同域名）时才需要配置 `cors.allow_origins`，且不支持 `*`。
 
 ### 演示账号
 
@@ -297,7 +328,7 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 
 | 配置 | 说明 | 建议 |
 | --- | --- | --- |
-| `server.addr` | 监听地址 | `:8080` |
+| `server.addr` | 监听地址 | `:8090` |
 | `server.mode` | `debug` / `release` | 生产 `release` |
 | `server.static_dir` | 前端产物目录 | 单二进制部署时设置 |
 | `db.*` | MySQL 连接 | 生产用环境变量注入密码 |
