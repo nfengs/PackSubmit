@@ -83,8 +83,10 @@ func main() {
 	masterDataService := service.NewMasterDataService(db)
 	contactService := service.NewContactService(db)
 	exportService := service.NewExportService(db, attachmentService, cfg.Template.Pack)
+	adminService := service.NewAdminService(db, proposalService)
 
-	h := handler.New(db, authService, proposalService, attachmentService, masterDataService, contactService, exportService)
+	h := handler.New(db, authService, proposalService, attachmentService, masterDataService,
+		contactService, exportService, adminService)
 	engine := router.New(h, manager, db, cfg)
 
 	server := &http.Server{

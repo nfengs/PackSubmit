@@ -98,6 +98,22 @@ func Routes(role int8) []Menu {
 		})
 	}
 
+	if HasPermission(role, PermUserManage) {
+		routes = append(routes, Menu{
+			Path: "/system/users", Name: "SystemUsers", Title: "用户管理",
+			Component: "admin/user", Permission: PermUserManage,
+		})
+	}
+
+	if HasPermission(role, PermMasterManage) {
+		routes = append(routes,
+			Menu{Path: "/system/customers", Name: "SystemCustomers", Title: "客户管理", Component: "admin/customer", Permission: PermMasterManage},
+			Menu{Path: "/system/suppliers", Name: "SystemSuppliers", Title: "供应商管理", Component: "admin/supplier", Permission: PermMasterManage},
+			Menu{Path: "/system/parts", Name: "SystemParts", Title: "零件号管理", Component: "admin/part", Permission: PermMasterManage},
+			Menu{Path: "/system/dicts", Name: "SystemDicts", Title: "字典管理", Component: "admin/dict", Permission: PermMasterManage},
+		)
+	}
+
 	if HasPermission(role, PermProposalAll) {
 		routes = append(routes, Menu{
 			Path: "/admin/proposals", Name: "AdminProposals", Title: "全量方案",
@@ -129,8 +145,22 @@ func Menus(role int8) []Menu {
 		})
 	}
 
-	if HasPermission(role, PermProposalAll) || HasPermission(role, PermAuditView) {
-		children := make([]Menu, 0, 2)
+	if HasPermission(role, PermUserManage) || HasPermission(role, PermMasterManage) ||
+		HasPermission(role, PermProposalAll) || HasPermission(role, PermAuditView) {
+		children := make([]Menu, 0, 7)
+
+		if HasPermission(role, PermUserManage) {
+			children = append(children, Menu{Path: "/system/users", Name: "SystemUsers", Title: "用户管理", Icon: "User"})
+		}
+
+		if HasPermission(role, PermMasterManage) {
+			children = append(children,
+				Menu{Path: "/system/customers", Name: "SystemCustomers", Title: "客户管理", Icon: "OfficeBuilding"},
+				Menu{Path: "/system/suppliers", Name: "SystemSuppliers", Title: "供应商管理", Icon: "Shop"},
+				Menu{Path: "/system/parts", Name: "SystemParts", Title: "零件号管理", Icon: "Box"},
+				Menu{Path: "/system/dicts", Name: "SystemDicts", Title: "字典管理", Icon: "Collection"},
+			)
+		}
 
 		if HasPermission(role, PermProposalAll) {
 			children = append(children, Menu{

@@ -93,10 +93,20 @@ function changedPaths() {
 const args = process.argv.slice(2);
 const changed = changedPaths();
 
+const explicitBackend = args.includes('--backend');
+const explicitFrontend = args.includes('--frontend');
+const explicitAll = args.includes('--all');
+const explicitOnly = explicitBackend || explicitFrontend || explicitAll;
+
+// 显式指定 --backend / --frontend 时只递增指定的一侧，避免误伤另一边
 const backendChanged =
-  args.includes('--all') || args.includes('--backend') || changed.some((item) => item.startsWith('backend/'));
+  explicitAll ||
+  explicitBackend ||
+  (!explicitOnly && changed.some((item) => item.startsWith('backend/')));
 const frontendChanged =
-  args.includes('--all') || args.includes('--frontend') || changed.some((item) => item.startsWith('frontend/'));
+  explicitAll ||
+  explicitFrontend ||
+  (!explicitOnly && changed.some((item) => item.startsWith('frontend/')));
 
 const releasedAt = nowText();
 const result = {};

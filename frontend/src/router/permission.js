@@ -7,9 +7,15 @@ let routesReady = false;
 const dynamicNames = [];
 
 function resolveView(component) {
-  const key = `../views/${component}.vue`;
-  if (viewModules[key]) return viewModules[key];
-  console.error(`[router] 未找到页面组件：${key}`);
+  // 同时支持「单文件页面」与「目录 + index.vue」两种组织方式
+  const candidates = [`../views/${component}.vue`, `../views/${component}/index.vue`];
+
+  for (const key of candidates) {
+    if (viewModules[key]) return viewModules[key];
+  }
+
+  console.error(`[router] 未找到页面组件：${candidates.join(' 或 ')}`);
+
   return () => import('@/views/error/403.vue');
 }
 

@@ -87,6 +87,65 @@ func New(h *handler.Handler, manager *auth.Manager, db *gorm.DB, cfg *config.Con
 		{
 			admin.POST("/proposals/archive", middleware.RequirePermission(auth.PermProposalArchive), h.ProposalArchive)
 			admin.GET("/audit-logs", middleware.RequirePermission(auth.PermAuditView), h.AuditLogs)
+
+			users := admin.Group("/users")
+			users.Use(middleware.RequirePermission(auth.PermUserManage))
+			{
+				users.GET("", h.AdminUsers)
+				users.GET("/template", h.AdminUserTemplate)
+				users.POST("/import", h.AdminUserImport)
+				users.POST("", h.AdminUserCreate)
+				users.PUT("/:id", h.AdminUserUpdate)
+				users.PATCH("/:id/status", h.AdminUserStatus)
+				users.POST("/:id/reset-password", h.AdminUserResetPassword)
+				users.GET("/:id/logs", h.AdminUserLogs)
+			}
+
+			customers := admin.Group("/customers")
+			customers.Use(middleware.RequirePermission(auth.PermMasterManage))
+			{
+				customers.GET("", h.AdminCustomers)
+				customers.GET("/check-name", h.AdminCustomerCheckName)
+				customers.POST("", h.AdminCustomerCreate)
+				customers.PUT("/:id", h.AdminCustomerUpdate)
+				customers.DELETE("/:id", h.AdminCustomerDelete)
+				customers.GET("/:id/logs", h.AdminCustomerLogs)
+			}
+
+			suppliers := admin.Group("/suppliers")
+			suppliers.Use(middleware.RequirePermission(auth.PermMasterManage))
+			{
+				suppliers.GET("", h.AdminSuppliers)
+				suppliers.GET("/template", h.AdminSupplierTemplate)
+				suppliers.POST("/import", h.AdminSupplierImport)
+				suppliers.GET("/check-name", h.AdminSupplierCheckName)
+				suppliers.POST("", h.AdminSupplierCreate)
+				suppliers.PUT("/:id", h.AdminSupplierUpdate)
+				suppliers.DELETE("/:id", h.AdminSupplierDelete)
+				suppliers.GET("/:id/logs", h.AdminSupplierLogs)
+			}
+
+			parts := admin.Group("/parts")
+			parts.Use(middleware.RequirePermission(auth.PermMasterManage))
+			{
+				parts.GET("", h.AdminParts)
+				parts.GET("/template", h.AdminPartTemplate)
+				parts.POST("/import", h.AdminPartImport)
+				parts.POST("/batch-preview", h.AdminPartBatchPreview)
+				parts.POST("/batch-update", h.AdminPartBatchUpdate)
+				parts.PUT("/:id", h.AdminPartUpdate)
+				parts.DELETE("/:id", h.AdminPartDelete)
+				parts.GET("/:id/logs", h.AdminPartLogs)
+			}
+
+			dicts := admin.Group("/dicts")
+			dicts.Use(middleware.RequirePermission(auth.PermMasterManage))
+			{
+				dicts.GET("", h.AdminDicts)
+				dicts.POST("", h.AdminDictCreate)
+				dicts.PUT("/:id", h.AdminDictUpdate)
+				dicts.DELETE("/:id", h.AdminDictDelete)
+			}
 		}
 	}
 

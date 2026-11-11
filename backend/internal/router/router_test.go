@@ -19,6 +19,7 @@ func TestRouteRegistration(t *testing.T) {
 	manager := auth.NewManager("test-secret", time.Hour, time.Hour)
 
 	engine := New(&handler.Handler{}, manager, nil, cfg)
+
 	if engine == nil {
 		t.Fatal("router 初始化失败")
 	}

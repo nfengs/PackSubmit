@@ -26,6 +26,9 @@ var actionNames = map[string]string{
 	"login":             "登录系统",
 	"logout":            "退出登录",
 	"password_change":   "修改密码",
+	"part_create":       "导入新增零件号",
+	"part_update":       "修改零件号信息",
+	"part_delete":       "删除零件号",
 }
 
 // ActionName 取动作中文名（未登记时回退为动作标识）

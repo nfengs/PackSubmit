@@ -41,14 +41,15 @@ type Handler struct {
 	MasterData  *service.MasterDataService
 	Contacts    *service.ContactService
 	Export      *service.ExportService
+	Admin       *service.AdminService
 }
 
 func New(db *gorm.DB, authService *service.AuthService, proposals *service.ProposalService,
 	attachments *service.AttachmentService, masterData *service.MasterDataService,
-	contacts *service.ContactService, export *service.ExportService) *Handler {
+	contacts *service.ContactService, export *service.ExportService, admin *service.AdminService) *Handler {
 	return &Handler{
 		DB: db, Auth: authService, Proposals: proposals, Attachments: attachments,
-		MasterData: masterData, Contacts: contacts, Export: export,
+		MasterData: masterData, Contacts: contacts, Export: export, Admin: admin,
 	}
 }
 

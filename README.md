@@ -279,6 +279,18 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
+| GET/POST/PUT/PATCH | `/admin/users`、`/admin/users/{id}`、`/admin/users/{id}/status` | 用户列表 / 新增 / 编辑 / 启停 |
+| GET/POST | `/admin/users/template`、`/admin/users/import` | 导入模板 / 批量导入 |
+| POST | `/admin/users/{id}/reset-password`、`GET /admin/users/{id}/logs` | 重置密码 / 维护日志 |
+| GET/POST/PUT/DELETE | `/admin/customers`、`/admin/customers/{id}` | 客户维护 |
+| GET | `/admin/customers/check-name`、`/admin/customers/{id}/logs` | 名称查重 / 维护日志 |
+| GET/POST/PUT/DELETE | `/admin/suppliers`、`/admin/suppliers/{id}` | 供应商维护（名称 / 代码 / 地址） |
+| GET/POST | `/admin/suppliers/template`、`/admin/suppliers/import` | 导入模板 / 批量导入 |
+| GET | `/admin/suppliers/check-name`、`/admin/suppliers/{id}/logs` | 名称查重 / 维护日志 |
+| GET/POST | `/admin/parts`、`/admin/parts/template`、`/admin/parts/import` | 零件号列表 / 模板 / 导入（自动生成草稿） |
+| POST | `/admin/parts/batch-preview`、`/admin/parts/batch-update` | 批量修改预览 / 二次确认提交 |
+| PUT/DELETE | `/admin/parts/{id}`、`GET /admin/parts/{id}/logs` | 行内修改 / 删除 / 维护日志 |
+| GET/POST/PUT/DELETE | `/admin/dicts`、`/admin/dicts/{id}` | 字典维护 |
 | POST | `/admin/proposals/archive` | 批量归档（变更归档时自动作废原方案） |
 | GET | `/admin/audit-logs` | 全局审计日志 |
 
@@ -323,6 +335,14 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 - 响应只在**结构与表不一致**时才建 View（`ProposalView / ProposalDetail / Statistics / ContactView / AuditLogView`）；客户、供应商、字典等直接输出模型，不做无意义的套壳。
 - 业务校验（提交完整性、以档案为准覆盖快照、派生字段计算）必须留在 service，DTO 只负责形状与格式。
 
+**8. 受控建单与主数据同步**
+
+- 导入零件号按「供应商 + 零件号」upsert；该零件没有任何有效方案（草稿 / 待评审 / 通过 / 驳回 / 已归档）时自动生成草稿（`ensureDraft`），供应商无需也无法自建方案；已有归档方案时不再生成草稿，应走「发起变更」。
+- 零件名称 / 项目名称变更（行内编辑、批量修改、重新导入）同步该零件下**所有状态**方案的 `part_name` / `project_model`。
+- 供应商改名同步方案 `supplier_name`、零件号 `supplier_name` 与账号 `dept`，保证归属不断裂。
+- 删除客户 / 供应商前做引用校验（方案引用、账号占用）；删除时把名称改写为 `原名称#ID` 再软删，释放唯一索引，历史方案的快照字段不受影响。
+- 用户、客户、供应商、零件号均提供页面内可查的维护日志；零件号日志按「供应商 + 零件号」查询。
+
 ---
 
 ## 十一、配置
@@ -359,20 +379,22 @@ contact:manage  master:manage  user:manage  audit:view  report:view
 
 已完成（第一阶段）：工程骨架、配置与迁移、登录/刷新/改密/限流、动态菜单与权限、方案列表/详情/编辑/提交/撤回/评审/归档/变更/删除、四类图片与附件、Excel 导出、审计日志、供应商联系人、工作台与全量方案列表。
 
-待补（第二阶段）：
+已完成（第二阶段）：主数据管理（用户 / 客户 / 供应商 / 零件号 / 字典的增删改、Excel 导入、名称查重、页面内维护日志）、受控建单链路（导入零件号后自动生成方案草稿）、零件号批量修改（预览 + 二次确认）与方案名称同步、行内编辑与零件号维护日志。
 
-1. 主数据管理页面与接口：用户、客户、供应商、零件号、字典的增删改与导入（含「导入零件号自动生成草稿」的受控建单链路）。
-2. 「全量详细方案」52 字段明细与导出。
-3. 批量修改（预览 + 二次确认）、零件号维护日志页面、主数据维护日志页面。
-4. 旧库数据迁移工具。
-5. PDF 导出（旧实现为 Dompdf，新方案建议 xlsx → PDF，待定）。
+待补（第三阶段）：
+
+1. 「全量详细方案」52 字段明细与导出（列设置 + 全字段 xlsx）。
+2. 旧库数据迁移工具（`pf_*` → 新表，含 ULID 映射与供应商 ID 转换）。
+3. PDF 导出（旧实现为 Dompdf，新方案建议 xlsx → PDF，待定）。
+4. 列表列配置 / 列宽持久化等体验增强。
 
 已知限制：
 
 - 登录限流与 token 黑名单为进程内存储，多实例部署需改为共享存储（Redis / DB）。
 - 附件上传暂无数量与容量配额，需在反向代理或应用层补充。
 - 单实例部署；导出为内存生成，超大并发下建议加限流。
-- 客户 / 供应商 / 零件号采用「唯一索引 + 软删」：软删后同名记录仍占用唯一键，第二阶段做主数据删除时需沿用旧方案（删除时改名释放唯一键，如 `原名称#ID`）。
+- 客户 / 供应商 / 零件号采用「唯一索引 + 软删」：删除时改名（`原名称#ID`）释放唯一键，可重新创建同名记录；历史方案保留快照，不受主数据删除影响。
+- 用户不支持删除，只支持禁用；禁用后已登录会话在下一次请求即失效。
 
 ---
 
